@@ -23,7 +23,7 @@ fn lexNum() void {
     var i: int = 0;
     var neg: int = 0;
     if isf {
-        if isf { pushTok(TK_FLOAT, t, 0, line); }
+        if isf { tkPos = start; pushTok(TK_FLOAT, t, 0, line); }
     } else {
         var k: int = 0;
         if getbyte(t) == 45 { neg = 1; k = 1; }
@@ -32,6 +32,7 @@ fn lexNum() void {
             k = k + 1;
         }
         if neg == 1 { val = 0 - val; }
+        tkPos = start;
         pushTok(TK_INT, t, val, line);
     }
 }

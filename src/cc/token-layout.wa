@@ -1,6 +1,8 @@
 // ---------------- token helpers ---------------------------------------------
+// each token record is 40 bytes: kind(8) text(8) ival(8) line(8) pos(8)
 fn tokBase() ptr { return sbData(toks); }
-fn tokKind(i: int) int { var b: ptr = tokBase(); return b[i * 32 + 0]; }
-fn tokText(i: int) ptr { var b: ptr = tokBase(); return (ptr)b[i * 32 + 8]; }
-fn tokIval(i: int) int { var b: ptr = tokBase(); return b[i * 32 + 16]; }
-fn tokLine(i: int) int { var b: ptr = tokBase(); return b[i * 32 + 24]; }
+fn tokKind(i: int) int { var b: ptr = tokBase(); return b[i * 40 + 0]; }
+fn tokText(i: int) ptr { var b: ptr = tokBase(); return (ptr)b[i * 40 + 8]; }
+fn tokIval(i: int) int { var b: ptr = tokBase(); return b[i * 40 + 16]; }
+fn tokLine(i: int) int { var b: ptr = tokBase(); return b[i * 40 + 24]; }
+fn tokPos(i: int) int { var b: ptr = tokBase(); return b[i * 40 + 32]; }

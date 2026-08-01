@@ -1,5 +1,6 @@
 fn lexStr() void {
     var sb: ptr = sbNew();
+    var st: int = spos;
     spos = spos + 1;
     while spos < srclen {
         var c: int = getbyte(csrc + spos);
@@ -32,6 +33,7 @@ fn lexStr() void {
     sbAppendChar(sb, 0);
     var n: int = sbLen(sb) - 1;
     var t: ptr = sbData(sb);
+    tkPos = st;
     pushTok(TK_STR, t, n, line);
     free(sb);
 }

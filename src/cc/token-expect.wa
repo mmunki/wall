@@ -1,6 +1,10 @@
 fn expect(kind: int, what: ptr) void {
     if cur() != kind {
-        fprintf(tout, "wall: line %d: error: expected %s\n", curLine(), what);
+        var sb: ptr = sbNew();
+        sbAppendStr(sb, "expected ");
+        sbAppendStr(sb, what);
+        sbAppendChar(sb, 0);
+        perr((str)sbData(sb));
         exit(1);
     }
     adv();

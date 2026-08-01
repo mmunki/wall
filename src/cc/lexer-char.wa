@@ -1,6 +1,7 @@
 fn lexChar() void {
     // char literal: 'x' or escaped '\n'. Lexed as an integer token so it can
     // be used anywhere an int literal is expected.
+    var st: int = spos;
     spos = spos + 1; // consume opening quote
     var val: int = 0;
     if spos < srclen {
@@ -33,5 +34,6 @@ fn lexChar() void {
     if spos < srclen && getbyte(csrc + spos) == 39 { spos = spos + 1; }
     else { die("unterminated char literal"); }
     var t: ptr = (ptr)malloc(1);
+    tkPos = st;
     pushTok(TK_INT, t, val, line);
 }

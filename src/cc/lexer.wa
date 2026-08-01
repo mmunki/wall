@@ -1,7 +1,8 @@
 fn lex() void {
     while 1 == 1 {
         skipWs();
-        if spos >= srclen { var et: ptr = (ptr)malloc(1); setbyte(et, 0); pushTok(TK_EOF, et, 0, line); return; }
+        if spos >= srclen { var et: ptr = (ptr)malloc(1); setbyte(et, 0); tkPos = spos; pushTok(TK_EOF, et, 0, line); return; }
+        tkPos = spos;
         var c: int = getbyte(csrc + spos);
         if c_isAlpha(c) {
             var start: int = spos;

@@ -68,6 +68,7 @@ let TOK_KIND = 0; let TOK_TEXT = 8; let TOK_IVAL = 16; let TOK_LINE = 24;
 var csrc: ptr = 0;      // pointer to source bytes
 var srclen: int = 0;   // source length
 var spos: int = 0;     // scan position
+var tkPos: int = 0;    // source offset of the token being pushed (for carets)
 var line: int = 1;     // current line
 var toks: ptr = 0;     // SB holding token bytes
 var tpos: int = 0;     // token index

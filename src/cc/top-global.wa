@@ -47,7 +47,7 @@ fn parseGlobal() void {
          expect(59, "';'");
      }
      elif k == TK_EOF { return; }
-     else { die("unexpected token at top level"); }
+     else { perr("unexpected token at top level"); }
  }
 
 // ---------------- main -------------------------------------------------------

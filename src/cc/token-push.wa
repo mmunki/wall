@@ -1,10 +1,11 @@
 fn pushTok(kind: int, text: ptr, ival: int, ln: int) void {
-    sbReserve(toks, 32);
+    sbReserve(toks, 40);
     var b: ptr = tokBase();
     var idx: int = sbLen(toks);
     b[idx + 0] = kind;
     b[idx + 8] = (int)text;
     b[idx + 16] = ival;
     b[idx + 24] = ln;
-    toks[8] = idx + 32;
+    b[idx + 32] = tkPos;
+    toks[8] = idx + 40;
 }

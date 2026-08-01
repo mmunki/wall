@@ -49,12 +49,20 @@ fn primary() void {
     if k == K_NULL { var r: ptr = newtmp(); fprintf(tout, "  %s = bitcast i64 0 to i8*\n", r); adv(); setVal(r, 0, "ptr", 0); return; }
     if k == TK_IDENT {
         var s: ptr = findall(curText());
-        if s == 0 { fprintf(tout, "wall: line %d: error: undefined identifier '%s'\n", curLine(), curText()); exit(1); }
+        if s == 0 {
+            var sb: ptr = sbNew();
+            sbAppendStr(sb, "undefined identifier '");
+            sbAppendStr(sb, (str)curText());
+            sbAppendStr(sb, "'");
+            sbAppendChar(sb, 0);
+            perr((str)sbData(sb));
+            exit(1);
+        }
         if s[SYM_ISFUNC] != 0 { setVal(0, 0, "fn", (ptr)s[SYM_NAME]); adv(); return; }
         if isStructType((ptr)s[SYM_TYP]) != 0 { setVal((ptr)s[SYM_LL], (ptr)s[SYM_LL], (ptr)s[SYM_TYP], 0); adv(); return; }
         var r: ptr = newtmp();
         var ll: ptr = lltyp((ptr)s[SYM_TYP]);
-        if strEq(ll, "void") { fprintf(tout, "wall: line %d: error: void value\n", curLine()); exit(1); }
+        if strEq(ll, "void") { perr("void value"); exit(1); }
         fprintf(tout, "  %s = load %s, %s* %s\n", r, ll, ll, (ptr)s[SYM_LL]);
         setVal(r, (ptr)s[SYM_LL], (ptr)s[SYM_TYP], 0);
         adv(); return;
@@ -62,6 +70,13 @@ fn primary() void {
     if k == 40 { // '('
         adv(); assign(); expect(41, "')'"); return;
     }
-    fprintf(tout, "wall: line %d: error: unexpected token '%s'\n", curLine(), curText());
+    var sb: ptr = sbNew();
+    var cc: int = 32;
+    if curPos() < srclen { cc = getbyte(csrc + curPos()); }
+    sbAppendStr(sb, "unexpected character '");
+    sbAppendChar(sb, cc);
+    sbAppendStr(sb, "' in expression");
+    sbAppendChar(sb, 0);
+    perr((str)sbData(sb));
     exit(1);
 }
