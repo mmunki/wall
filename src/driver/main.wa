@@ -141,6 +141,7 @@ fn wall_driver(argc: int, argv: ptr) int {
     bInit(); bCat(TMPD); bCat("merged.wa");
     memcpy(premerged, bbuf, blen + 1);
     if preprocess(premerged) != 0 { return 1; }
+    srcname = src;   // remember the real source file for diagnostics
     src = premerged;
 
     // run pipeline

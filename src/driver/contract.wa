@@ -102,7 +102,7 @@ var bbuf: ptr = 0;
 var blen: int = 0;
 var bcap: int = 0;
 // diag.wa
-var color: int = 1;
+// `color` is defined in src/cc/contract.wa (first in the merged TU).
 var nowarn: int = 0;
 var werror: int = 0;
 // flags.wa

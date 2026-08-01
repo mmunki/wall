@@ -3,6 +3,7 @@ fn wall_compile(infile: str, outfile: str) int {
     if file == 0 { printf("wall: cannot open %s\n", infile); return 1; }
     csrc = sbData(file);
     srclen = sbLen(file);
+    if srcname == 0 { srcname = infile; }
     toks = sbNew();
     strdefs = 0;
     nstr = 0;
