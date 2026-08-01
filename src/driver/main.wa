@@ -44,6 +44,10 @@ fn wall_driver(argc: int, argv: ptr) int {
         var role: int = matchFlag(a);
         if role == R_HELP { printHelp(); return 0; }
         elif role == R_VERSION { printVersion(); return 0; }
+        elif role == R_PRINTTAR { printTargets(); return 0; }
+        elif role == R_TARGET {
+            if i + 1 < argc { targetTriple = arg_at(argv, i + 1); i = i + 1; }
+        }
         elif role == R_VERBOSE || role == R_VERBOSEX { verbose = 1; }
         elif role == R_OPTLVL0 { optlevel = 0; }
         elif role == R_OPTLVL1 { optlevel = 1; }

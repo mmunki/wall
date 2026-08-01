@@ -127,3 +127,4 @@ var optargs: ptr = 0;    // extra args for `opt`
 var llcargs: ptr = 0;    // extra args for `llc`
 var linkargs: ptr = 0;   // extra args for `ld.lld`
 var mllargs: ptr = 0;    // extra `-mllvm` args for both opt and llc
+var targetTriple: ptr = 0; // -target <triple>: cross-codegen triple for llc

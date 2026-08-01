@@ -26,6 +26,8 @@ fn printHelp() void {
     printf("  -S                         emit assembly only\n");
     printf("  -emit-llvm                 emit LLVM IR only\n");
     printf("  -o <file>                  write output to <file>\n");
+    printf("  -target <triple>           cross-compile to <triple> (e.g. x86_64)\n");
+    printf("  --print-targets            list supported codegen targets\n");
     printf("  -O0 -O1 -O2 -O3 -Os -Oz    optimization level (default -O2)\n");
     printf("  -g                         generate debug information\n");
     printf("  -shared -static            build shared library / static link\n");
@@ -49,9 +51,34 @@ fn printHelp() void {
 }
 
 fn printVersion() void {
-    printf("WALL 0.1.0\n");
-    printf("  target: aarch64-linux-android\n");
+    printf("WALL 0.2.0 multiarch\n");
+    var dt: str = "aarch64-linux-android";
+    if targetTriple != 0 { dt = (str)targetTriple; }
+    printf("  target: %s\n", dt);
     printf("  engine: libwall.so (wall_compile)\n");
     printf("  options: %lld registered\n", countFlags());
     printf("  expressions: %lld operators/expressions\n", N_EXPRESSIONS);
+    printf("  use: -target <triple> to cross-compile; --print-targets to list\n");
+}
+
+// ----------------------------------------------------------------------------
+// printTargets: list the codegen targets the backend can target. Because the
+// backend is LLVM IR, every triple registered in the installed llc is
+// available; this prints the common ones. Use `llc --version` for the full set.
+// ----------------------------------------------------------------------------
+fn printTargets() void {
+    printf("WALL supported codegen targets (via LLVM IR backend):\n");
+    printf("  aarch64    aarch64-linux-android (default)\n");
+    printf("  x86_64     x86_64-linux-gnu\n");
+    printf("  i386       i386-linux-gnu (x86 32-bit)\n");
+    printf("  arm        armv7-linux-gnueabihf (aarch32)\n");
+    printf("  riscv64    riscv64-linux-gnu\n");
+    printf("  riscv32    riscv32-linux-gnu\n");
+    printf("  ppc64le    powerpc64le-linux-gnu\n");
+    printf("  ppc64      powerpc64-linux-gnu\n");
+    printf("  mips64     mips64el-linux-gnuabi64\n");
+    printf("  mips       mipsel-linux-gnu\n");
+    printf("  wasm32     wasm32-unknown-unknown\n");
+    printf("  sparc      sparcv9-linux-gnu\n");
+    printf("Run `llc --version` on this system for the complete list.\n");
 }

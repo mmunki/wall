@@ -86,3 +86,18 @@ fn bCatC(c: int) void {
     setbyte(bbuf + blen, c);
     blen = blen + 1;
     setbyte(bbuf + blen, 0);
+}
+
+// ----------------------------------------------------------------------------
+// startsWith: return 1 if the NUL-terminated string `s` begins with `prefix`,
+// else 0. Used by the cross-target logic in pipeline.wa.
+// ----------------------------------------------------------------------------
+fn startsWith(s: str, prefix: str) int {
+    var i: int = 0;
+    while getbyte((ptr)prefix + i) != 0 {
+        if getbyte((ptr)s + i) == 0 { return 0; }
+        if getbyte((ptr)s + i) != getbyte((ptr)prefix + i) { return 0; }
+        i = i + 1;
+    }
+    return 1;
+}

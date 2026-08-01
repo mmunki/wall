@@ -1,4 +1,3 @@
-}
 fn ereset() str { if color == 1 { return "\033[0m"; } return ""; }
 fn ered()   str { if color == 1 { return "\033[1;31m"; } return ""; }
 fn eryel()  str { if color == 1 { return "\033[1;33m"; } return ""; }

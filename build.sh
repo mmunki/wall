@@ -23,16 +23,100 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # ---------------------------------------------------------------------------
-# Paths are derived from the environment so the build is portable across
-# installations. SYSROOT (the root of the C runtime used for linking) comes
-# from $PREFIX when set; DYNLINK (the runtime dynamic linker) defaults to the
-# Android one but can be overridden with $WALL_LINKER.
+# Multi-architecture build.
+# ---------------------------------------------------------------------------
+# Choose the architecture the compiler itself is built FOR (i.e. the host
+# binary that gets linked). Pass an arch name or a full LLVM triple:
+#
+#     TARGET=aarch64 ./build.sh          # default (aarch64-linux-android)
+#     TARGET=x86_64  ./build.sh
+#     TARGET=i386    ./build.sh
+#     TARGET=armv7   ./build.sh          # aarch32 / ARM hard-float
+#     TARGET=riscv64 ./build.sh
+#     TARGET=riscv32 ./build.sh
+#     TARGET=ppc64le ./build.sh
+#     TARGET=mips64el ./build.sh
+#
+# The compiler FRONTEND is written in Wall and is machine-independent; it
+# emits LLVM IR, so the resulting bin/wall is always able to cross-compile to
+# every target the installed llc supports (see `wall --print-targets`).
+# Choosing a TARGET here only changes which native binary bin/wall + libwall.so
+# are linked for. Linking a non-native target requires that target's sysroot
+# (set SYSROOT/PREFIX accordingly).
 # ---------------------------------------------------------------------------
 SYSROOT="${PREFIX:-$HOME}"
-TRIPLE=aarch64-linux-android
-DYNLINK="${WALL_LINKER:-/system/bin/linker64}"
+TARGET="${TARGET:-aarch64}"
 PREFIX="${PREFIX:-$HOME/.local}"
 mkdir -p tmp bin lib
+
+# Map the requested target name onto: TRIPLE (for llc -mtriple), ENDIAN
+# (-EL/-EB), MACHINE (ld.lld output format), DYNLINK (dynamic linker path),
+# and CRTBEG/CRTEND/UNWIND (crt object paths used to link the launcher).
+# Recognise the full triple directly when TARGET looks like one.
+case "$TARGET" in
+  aarch64|aarch64-linux-android)
+    TRIPLE=aarch64-linux-android; ENDIAN=-EL; MACHINE="-m aarch64linux"
+    DYNLINK="${WALL_LINKER:-/system/bin/linker64}"
+    CRTBEG="$SYSROOT/lib/crtbegin_dynamic.o"; CRTEND="$SYSROOT/lib/crtend_android.o"
+    UNWIND="-l:libunwind.a"; EXTRA_LD="--fix-cortex-a53-843419"
+    ;;
+  aarch64-linux-gnu)
+    TRIPLE=aarch64-linux-gnu; ENDIAN=-EL; MACHINE="-m aarch64linux"
+    DYNLINK="${WALL_LINKER:-/lib/ld-linux-aarch64.so.1}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  x86_64|x86_64-linux-gnu)
+    TRIPLE=x86_64-linux-gnu; ENDIAN=-EL; MACHINE="-m elf_x86_64"
+    DYNLINK="${WALL_LINKER:-/lib64/ld-linux-x86-64.so.2}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  i386|i686|x86|i386-linux-gnu)
+    TRIPLE=i386-linux-gnu; ENDIAN=-EL; MACHINE="-m elf_i386"
+    DYNLINK="${WALL_LINKER:-/lib/ld-linux.so.2}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  armv7|arm|aarch32|armv7-linux-gnueabihf)
+    TRIPLE=armv7-linux-gnueabihf; ENDIAN=-EL; MACHINE="-m armelf_linux_eabi"
+    DYNLINK="${WALL_LINKER:-/lib/ld-linux-armhf.so.3}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  riscv64|riscv64-linux-gnu)
+    TRIPLE=riscv64-linux-gnu; ENDIAN=-EL; MACHINE="-m elf64lriscv"
+    DYNLINK="${WALL_LINKER:-/lib/ld-linux-riscv64-lp64d.so.1}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  riscv32|riscv32-linux-gnu)
+    TRIPLE=riscv32-linux-gnu; ENDIAN=-EL; MACHINE="-m elf32lriscv"
+    DYNLINK="${WALL_LINKER:-/lib/ld-linux-riscv32-ilp32d.so.1}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  ppc64le|powerpc64le-linux-gnu)
+    TRIPLE=powerpc64le-linux-gnu; ENDIAN=-EL; MACHINE="-m elf64lppc"
+    DYNLINK="${WALL_LINKER:-/lib64/ld64.so.2}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  mips64el|mips64el-linux-gnuabi64)
+    TRIPLE=mips64el-linux-gnuabi64; ENDIAN=-EL; MACHINE="-m elf64ltsmip"
+    DYNLINK="${WALL_LINKER:-/lib64/ld.so.1}"
+    CRTBEG="$SYSROOT/lib/crt1.o"; CRTEND="$SYSROOT/lib/crtn.o"
+    UNWIND="-lgcc"; EXTRA_LD=""
+    ;;
+  *)
+    # Treat unknown values as a raw LLVM triple; keep EL + aarch64-style link,
+    # relying on the caller's SYSROOT for the target crt objects.
+    TRIPLE="$TARGET"; ENDIAN=-EL; MACHINE="-m aarch64linux"
+    DYNLINK="${WALL_LINKER:-/system/bin/linker64}"
+    CRTBEG="$SYSROOT/lib/crtbegin_dynamic.o"; CRTEND="$SYSROOT/lib/crtend_android.o"
+    UNWIND="-l:libunwind.a"; EXTRA_LD=""
+    ;;
+esac
 
 # --install target: copy output binaries to their own paths under PREFIX.
 # The launcher uses an $ORIGIN-relative rpath, so libwall.so may live anywhere
@@ -211,19 +295,19 @@ awk '
   { print }
 ' tmp/wa.ll > tmp/wa.dedup.ll
 opt -O2 tmp/wa.dedup.ll -o tmp/wa.opt.ll
-llc -relocation-model=pic -filetype=obj -O2 -o tmp/wa.o tmp/wa.opt.ll
-ld.lld --sysroot=$SYSROOT -EL --hash-style=gnu -shared \
+llc -mtriple=$TRIPLE -relocation-model=pic -filetype=obj -O2 -o tmp/wa.o tmp/wa.opt.ll
+ld.lld --sysroot=$SYSROOT $ENDIAN --hash-style=gnu -shared \
   -soname libwall.so \
   -o lib/libwall.so tmp/wa.o -L$SYSROOT/lib -L/system/lib64
 
 echo "[2/3] build tiny wall launcher (ELF, links libwall.so)"
 stage0/cc src/wall-launcher.wa -o tmp/wl.ll
 opt -O2 tmp/wl.ll -o tmp/wl.opt.ll
-llc -relocation-model=pic -filetype=obj -O2 -o tmp/wl.o tmp/wl.opt.ll
-ld.lld --sysroot=$SYSROOT -EL --fix-cortex-a53-843419 -z now -z relro \
+llc -mtriple=$TRIPLE -relocation-model=pic -filetype=obj -O2 -o tmp/wl.o tmp/wl.opt.ll
+ld.lld --sysroot=$SYSROOT $ENDIAN $EXTRA_LD -z now -z relro \
   -z max-page-size=16384 --no-rosegment --hash-style=gnu --eh-frame-hdr \
-  -m aarch64linux -pie -dynamic-linker "$DYNLINK" \
+  $MACHINE -pie -dynamic-linker "$DYNLINK" \
   -o bin/wall tmp/wl.o -Llib -lwall \
   -rpath '$ORIGIN/../lib' \
-  $SYSROOT/lib/crtbegin_dynamic.o -L$SYSROOT/lib -L/system/lib64 \
-  -l:libunwind.a -ldl -lc $SYSROOT/lib/crtend_android.o
+  $CRTBEG -L$SYSROOT/lib -L/system/lib64 \
+  $UNWIND -ldl -lc $CRTEND

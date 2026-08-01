@@ -66,6 +66,8 @@ let R_OPTARGV  = 43;  // opt pass-through: append literal arg to `opt`
 let R_LLCARGV  = 44;  // llc pass-through: append literal arg to `llc`
 let R_LINKARGV = 45;  // link pass-through: append literal arg to `ld.lld`
 let R_MLLARGV  = 46;  // -mllvm pass-through: append literal arg to both
+let R_TARGET   = 47;  // -target <triple>: cross-compile codegen target
+let R_PRINTTAR = 48;  // --print-targets: list supported codegen targets
 
 // ---------------- option state ------------------------------------------------
 // NOTE: all option-state globals (optlevel, verbose, mode, src, output, ...)
@@ -164,6 +166,11 @@ fn initFlags() void {
     addFlag("run", R_RUN, "compile and run <file>");
     addFlag("build", R_BUILD, "build executable (default)");
     addFlag("obj", R_OBJ, "compile to object only");
+    // cross-compilation targets
+    addFlag("-target", R_TARGET, "cross-compile: set codegen triple <triple>");
+    addFlag("--target", R_TARGET, "alias for -target");
+    addFlag("--print-targets", R_PRINTTAR, "list supported codegen targets and exit");
+    addFlag("--list-targets", R_PRINTTAR, "alias for --print-targets");
     // aliases for convenience
     addFlag("-v", R_VERBOSEX, "verbose + version alias");
 

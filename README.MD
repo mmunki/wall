@@ -101,6 +101,37 @@ The script performs these stages:
   3. Optimize, code-generate, and link to produce lib/libwall.so.
   4. Build the tiny `wall` ELF launcher that links libwall.so.
 
+Cross-building the compiler itself:
+
+  TARGET=x86_64 ./build.sh      # build bin/wall for x86_64
+  TARGET=i386   ./build.sh      # 32-bit x86
+  TARGET=armv7  ./build.sh      # aarch32 (ARM hard-float)
+  TARGET=aarch64-linux-gnu ./build.sh
+  TARGET=riscv64 ./build.sh     # RISC-V 64
+  TARGET=riscv32 ./build.sh
+  TARGET=ppc64le ./build.sh
+  TARGET=mips64el ./build.sh
+
+`TARGET` selects the architecture of the native compiler binary produced.
+Each requires that architecture's sysroot/linker (set SYSROOT/PREFIX and
+WALL_LINKER). The default `aarch64` targets aarch64-linux-android (Termux).
+CI cross-builds for every target above via .github/workflows/build.yml.
+
+Multi-architecture compilation
+
+The Wall frontend is written in Wall and emits LLVM IR, so the built compiler
+is machine-independent and can cross-compile to any target its installed
+llc supports. Use `-target <triple>` and `--print-targets`:
+
+  wall --print-targets                        # list available targets
+  wall -target x86_64-linux-gnu -S hello.wa   # emit x86_64 assembly
+  wall -target riscv64-linux-gnu -S hello.wa  # emit RISC-V assembly
+  wall -target armv7-linux-gnueabihf -S hello.wa
+  wall -target wasm32-unknown-unknown -S hello.wa
+
+The compiler picks the linker endianness (`-EL`/`-EB`) and output format
+(`-m ...`) from the triple, so `-c`/object emission also follows the target.
+
 ---
 
 Command-Line Surface

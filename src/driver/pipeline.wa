@@ -8,6 +8,7 @@ fn buildOptCmd() void {
 fn buildLlvmObjCmd() void {
     bInit();
     bCat("llc");
+    if targetTriple != 0 { bCat(" -mtriple="); bCat(targetTriple); }
     if pic == 1 { bCat(" -relocation-model=pic"); }
     bCat(" -filetype=obj -O"); bCatI(optlevel);
     if llcargs != 0 { bCat(llcargs); }
@@ -17,18 +18,45 @@ fn buildLlvmObjCmd() void {
 fn buildLlvmAsmCmd() void {
     bInit();
     bCat("llc -filetype=asm -O"); bCatI(optlevel);
+    if targetTriple != 0 { bCat(" -mtriple="); bCat(targetTriple); }
     bCat(" -o "); bCat(TMPD); bCat("w.s "); bCat(TMPD); bCat("w.opt.ll");
+}
+
+// targetEndian: the endianness flag for ld.lld for the active -target triple.
+// Returns "-EL" (little) or "-EB" (big). Defaults to little-endian.
+fn targetEndian() str {
+    if targetTriple != 0 {
+        if startsWith(targetTriple, "powerpc-") == 1 || startsWith(targetTriple, "powerpc64-") == 1
+           || startsWith(targetTriple, "mips-") == 1 || startsWith(targetTriple, "mips64-") == 1
+           || startsWith(targetTriple, "armeb-") == 1 || startsWith(targetTriple, "aarch64_be-") == 1
+           || startsWith(targetTriple, "sparc-") == 1 { return "-EB"; }
+    }
+    return "-EL";
+}
+
+// targetMachine: the ld.lld output format (-m) for the active -target triple.
+fn targetMachine() str {
+    if targetTriple != 0 {
+        if startsWith(targetTriple, "aarch64") == 1 { return "-m aarch64linux"; }
+        if startsWith(targetTriple, "x86_64") == 1 { return "-m elf_x86_64"; }
+        if startsWith(targetTriple, "i386") == 1 || startsWith(targetTriple, "i686") == 1 { return "-m elf_i386"; }
+        if startsWith(targetTriple, "armv7") == 1 || startsWith(targetTriple, "arm-") == 1 || startsWith(targetTriple, "armv") == 1 { return "-m armelf_linux_eabi"; }
+        if startsWith(targetTriple, "riscv64") == 1 { return "-m elf64lriscv"; }
+        if startsWith(targetTriple, "riscv32") == 1 { return "-m elf32lriscv"; }
+    }
+    return "-m aarch64linux";
 }
 
 fn buildLinkCmd() void {
     bInit();
     if shared == 1 {
-        bCat("ld.lld --sysroot="); bCat(SYSROOT); bCat(" -EL --hash-style=gnu -shared -o ");
+        bCat("ld.lld --sysroot="); bCat(SYSROOT); bCat(" "); bCat(targetEndian());
+        bCat(" --hash-style=gnu -shared -o ");
         bCat(output); bCat(" "); bCat(TMPD); bCat("w.o -L"); bCat(SYSROOT); bCat("/lib -L/system/lib64");
     } else {
         bCat("ld.lld --sysroot="); bCat(SYSROOT);
-        bCat(" -EL --fix-cortex-a53-843419 -z now -z relro -z max-page-size=16384");
-        bCat(" --no-rosegment --hash-style=gnu --eh-frame-hdr -m aarch64linux");
+        bCat(" "); bCat(targetEndian()); bCat(" --fix-cortex-a53-843419 -z now -z relro -z max-page-size=16384");
+        bCat(" --no-rosegment --hash-style=gnu --eh-frame-hdr "); bCat(targetMachine());
         if pie == 1 { bCat(" -pie -dynamic-linker "); bCat(DYNLINK); }
         bCat(" -o "); bCat(output); bCat(" "); bCat(TMPD); bCat("w.o ");
         if linkargs != 0 { bCat(linkargs); bCat(" "); }
@@ -63,6 +91,11 @@ fn compileAndLink() int {
         einfo("emitting assembly");
         if run() != 0 { eerr("llc(asm) failed"); return 1; }
         eok("assembly emitted");
+        if output != 0 {
+            bInit(); bCat("cp "); bCat(TMPD); bCat("w.s "); bCat(output);
+            run();
+            eok("assembly saved to output");
+        }
         return 0;
     }
 

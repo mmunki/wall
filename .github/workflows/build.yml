@@ -1,0 +1,140 @@
+# ============================================================================
+# Wall -- multi-architecture build & cross-codegen CI
+# ----------------------------------------------------------------------------
+# The Wall compiler frontend is written in Wall and emits LLVM IR, so a single
+# compiler binary can cross-compile to every target its installed llc supports.
+# This workflow:
+#   1. Bootstraps the compiler from the C seed (stage0/cc) via build.sh.
+#   2. Cross-LINKS the compiler binary itself for many architectures using the
+#      per-arch glibc sysroots provided by the cross toolchain packages.
+#   3. Smoke-tests cross-codegen: bin/wall -target <triple> -S emits the right
+#      assembly for each target.
+#
+# Targets (each built as a native binary for that architecture):
+#   x86_64, i386, aarch64, armv7(aarch32), riscv64, riscv32, ppc64le, mips64el
+# wasm32 is verified as a codegen-only target (no sysroot / link needed).
+# ============================================================================
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  LLVM_VERSION: 18
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64
+          - i386
+          - aarch64
+          - armv7
+          - riscv64
+          - riscv32
+          - ppc64le
+          - mips64el
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install LLVM toolchain (opt, llc, ld.lld) with all targets
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_VERSION main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y llvm-$LLVM_VERSION lld-$LLVM_VERSION \
+            binutils base64 coreutils
+          # Prepend the LLVM bin dir so opt/llc/ld.lld resolve to this version.
+          echo "/usr/lib/llvm-$LLVM_VERSION/bin" >> "$GITHUB_PATH"
+
+      # glibc cross sysroots: provide crt1.o/crtn.o + libc for each ELF target.
+      - name: Install cross-compilation sysroots
+        run: |
+          sudo apt-get install -y \
+            libc6-dev-i386-cross \
+            libc6-dev-amd64-cross \
+            libc6-dev-arm64-cross \
+            libc6-dev-armhf-cross \
+            libc6-dev-riscv64-cross \
+            libc6-dev-riscv32-cross \
+            libc6-dev-ppc64el-cross \
+            libc6-dev-mipsn64-cross \
+            gcc-multilib gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu \
+            gcc-riscv64-linux-gnu gcc-riscv32-linux-gnu \
+            gcc-powerpc64le-linux-gnu gcc-mips64el-linux-gnuabi64 \
+            qemu-user
+
+      - name: Build Wall for ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+          # Overridden per-arch below when a cross sysroot is required.
+        run: |
+          case "$TARGET" in
+            x86_64)   SYS=/usr/x86_64-linux-gnu        TRIPLE=x86_64 ;;
+            i386)     SYS=/usr/i686-linux-gnu          TRIPLE=i386 ;;
+            aarch64)  SYS=/usr/aarch64-linux-gnu       TRIPLE=aarch64-linux-gnu ;;
+            armv7)    SYS=/usr/arm-linux-gnueabihf     TRIPLE=armv7 ;;
+            riscv64)  SYS=/usr/riscv64-linux-gnu       TRIPLE=riscv64 ;;
+            riscv32)  SYS=/usr/riscv32-linux-gnu       TRIPLE=riscv32 ;;
+            ppc64le)  SYS=/usr/powerpc64le-linux-gnu   TRIPLE=ppc64le ;;
+            mips64el) SYS=/usr/mips64el-linux-gnuabi64 TRIPLE=mips64el ;;
+          esac
+          export PREFIX="$SYS"
+          export WALL_LINKER="$(find "$SYS/lib" -name 'ld-linux*.so*' -o -name 'ld.so*' 2>/dev/null | head -1)"
+          ./build.sh
+          ./build.sh install
+
+      - name: Smoke-test cross-codegen
+        run: |
+          printf 'extern fn printf(fmt: str, ...) int;\nfn main() void { printf("hi\\n"); }\n' > t.wa
+          case "${{ matrix.target }}" in
+            x86_64)  triple=x86_64-linux-gnu ;;
+            i386)    triple=i386-linux-gnu ;;
+            aarch64) triple=aarch64-linux-gnu ;;
+            armv7)   triple=armv7-linux-gnueabihf ;;
+            riscv64) triple=riscv64-linux-gnu ;;
+            riscv32) triple=riscv32-linux-gnu ;;
+            ppc64le) triple=powerpc64le-linux-gnu ;;
+            mips64el) triple=mips64el-linux-gnuabi64 ;;
+          esac
+          wall --version
+          wall -target "$triple" -S t.wa -o t.s
+          test -s t.s && echo "cross-codegen OK for $triple"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wall-${{ matrix.target }}
+          path: |
+            bin/wall
+            lib/libwall.so
+
+  # Verify that the compiler can emit WebAssembly (no sysroot required).
+  wasm:
+    name: build (wasm32 codegen)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install LLVM
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm lld binutils
+      - name: Build native compiler
+        run: ./build.sh
+      - name: Cross-codegen to wasm32
+        run: |
+          printf 'extern fn printf(fmt: str, ...) int;\nfn main() void { printf("hi\\n"); }\n' > t.wa
+          ./bin/wall -target wasm32-unknown-unknown -S t.wa -o t.wat
+          head -1 t.wat
