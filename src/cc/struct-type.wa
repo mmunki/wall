@@ -1,0 +1,12 @@
+fn isStructType(t: ptr) int {
+    if t == 0 { return 0; }
+    if findStruct(t) != 0 { return 1; }
+    return 0;
+}
+ fn isPtrType(t: ptr) int {
+     if t == 0 { return 0; }
+     if strEq(t, "ptr") != 0 || strEq(t, "str") != 0 { return 1; }
+     t = resolveType(t);
+     if strEq(t, "ptr") != 0 || strEq(t, "str") != 0 { return 1; }
+     return 0;
+ }

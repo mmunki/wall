@@ -1,0 +1,129 @@
+// ============================================================================
+// WALL DRIVER MODULE: contract.wa  -- shared declarations & state
+// ----------------------------------------------------------------------------
+// Because the Wall compiler compiles a single translation unit, all driver
+// modules are concatenated into one file before compilation. This header
+// module MUST come first: it declares every shared global variable and every
+// cross-module function as `extern`, so that any function body that follows
+// can reference state and call helpers that are defined in a later module.
+//
+// The compiler does not support `extern var`, so shared globals are defined
+// (not merely declared) right here, and modules refer to them directly by
+// name. Function definitions in later modules override the extern
+// declarations here (marked defined), so no duplicate declarations leak out.
+// ============================================================================
+
+// ---------------- libc --------------------------------------------------------
+// NOTE: the common libc functions (malloc/free/realloc/memcpy/fopen/fread/
+// fwrite/fclose/strlen/strcmp/printf/fprintf/snprintf/exit/getbyte/setbyte)
+// are already declared at the top of the compiler module (src/wall.wa), which
+// is concatenated into the same single translation unit. Re-declaring them
+// here would produce duplicate extern declarations. Only the functions the
+// driver needs that the compiler module does not declare are listed here.
+extern fn system(cmd: str) int;
+extern fn access(path: str, mode: int) int;
+
+// ---------------- compiler engine ---------------------------------------------
+// NOTE: wall_compile() is defined by the compiler module (src/wall.wa), which
+// is concatenated into the same single translation unit BEFORE this header.
+// It therefore does not need (and must not have) an extern declaration here;
+// the compiler emits one definition of the function for the whole TU.
+extern fn initPaths() void;
+
+// ---------------- string.wa ---------------------------------------------------
+extern fn bInit() void;
+extern fn bReserve(need: int) void;
+extern fn bCat(s: str) void;
+extern fn bCatN(s: ptr, n: int) void;
+extern fn bCatI(v: int) void;
+extern fn bCatC(c: int) void;
+
+// ---------------- diag.wa -----------------------------------------------------
+extern fn ereset() str;
+extern fn ered() str;
+extern fn eryel() str;
+extern fn ecyan() str;
+extern fn egrn() str;
+extern fn ebold() str;
+extern fn emag() str;
+extern fn eblue() str;
+extern fn edim() str;
+extern fn eerr(msg: str) void;
+extern fn ewarn(msg: str) void;
+extern fn enote(msg: str) void;
+extern fn einfo(msg: str) void;
+extern fn eok(msg: str) void;
+extern fn d_fileExists(path: str) int;
+extern fn run() int;
+
+// ---------------- flags.wa ----------------------------------------------------
+extern fn initFlags() void;
+extern fn loadFlagFile(path: str) int;
+extern fn matchFlag(a: str) int;
+extern fn addFlag(pat: str, role: int, desc: str) void;
+extern fn roleName(r: ptr) int;
+extern fn optArgFor(a: str) str;
+extern fn llcArgFor(a: str) str;
+extern fn linkArgFor(a: str) str;
+extern fn mllArgFor(a: str) str;
+extern fn appendOptArg(a: str) void;
+extern fn appendLlcArg(a: str) void;
+extern fn appendLinkArg(a: str) void;
+extern fn appendMllArg(a: str) void;
+
+// ---------------- pipeline.wa -------------------------------------------------
+extern fn buildOptCmd() void;
+extern fn buildLlvmObjCmd() void;
+extern fn buildLlvmAsmCmd() void;
+extern fn buildLinkCmd() void;
+extern fn compileAndLink() int;
+
+// ---------------- preproc.wa --------------------------------------------------
+extern fn preprocess(merged: str) int;
+extern fn arg_at(argv: ptr, i: int) str;
+
+// ---------------- libembed.wa -------------------------------------------------
+extern fn b64decode(b64: ptr) ptr;
+extern fn liblookup(name: ptr) ptr;
+extern fn libbasename(p: ptr) void;
+extern fn libfill() void;
+
+// ---------------- help.wa -----------------------------------------------------
+extern fn printHelp() void;
+extern fn printVersion() void;
+
+// ---------------- shared state (defined here, used everywhere) ----------------
+// paths.wa
+var TMPD: ptr = 0;
+var SYSROOT: ptr = 0;
+var DYNLINK: ptr = 0;
+// string.wa
+var bbuf: ptr = 0;
+var blen: int = 0;
+var bcap: int = 0;
+// diag.wa
+var color: int = 1;
+var nowarn: int = 0;
+var werror: int = 0;
+// flags.wa
+var optlevel: int = 2;
+var verbose: int = 0;
+var emit_obj: int = 0;
+var emit_asm: int = 0;
+var emit_ir: int = 0;
+var shared: int = 0;
+var pic: int = 0;
+var pie: int = 1;
+var do_link: int = 1;
+var save_temps: int = 0;
+var debug: int = 0;
+var mode: int = 0;
+var src: ptr = 0;
+var output: ptr = 0;
+var flags: ptr = 0;
+// flags.wa extra-argument accumulators (NULL-terminated strings appended to
+// the respective LLVM tool command line when non-empty)
+var optargs: ptr = 0;    // extra args for `opt`
+var llcargs: ptr = 0;    // extra args for `llc`
+var linkargs: ptr = 0;   // extra args for `ld.lld`
+var mllargs: ptr = 0;    // extra `-mllvm` args for both opt and llc

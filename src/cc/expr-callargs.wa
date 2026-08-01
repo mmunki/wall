@@ -1,0 +1,93 @@
+fn callArgs() void {
+    var f: ptr = findFunc(vfn);
+    // builtins
+    if vfn != 0 && strEq(vfn, "getbyte") {
+        assign(); expect(41, "')'");
+        var r: ptr = newtmp(); var r2: ptr = newtmp();
+        fprintf(tout, "  %s = load i8, i8* %s\n", r, vreg);
+        fprintf(tout, "  %s = zext i8 %s to i64\n", r2, r);
+        setVal(r2, 0, "int", 0); return;
+    }
+    if vfn != 0 && strEq(vfn, "setbyte") {
+        assign();   // pointer -> vreg
+        var pp: ptr = vreg;
+        expect(44, "','");
+        assign();   // value -> vreg
+        expect(41, "')'");
+        var r: ptr = newtmp();
+        fprintf(tout, "  %s = trunc i64 %s to i8\n", r, vreg);
+        fprintf(tout, "  store i8 %s, i8* %s\n", r, pp);
+        setVal(0, 0, "void", 0); return;
+    }
+    if vfn != 0 && strEq(vfn, "arge") {
+        expect(41, "')'");
+        var r: ptr = newtmp();
+        fprintf(tout, "  %s = load i64, i64* @w_argc\n", r);
+        setVal(r, 0, "int", 0); return;
+    }
+    if vfn != 0 && strEq(vfn, "argp") {
+        assign();   // index -> vreg
+        var idx: ptr = vreg;
+        expect(41, "')'");
+        var r: ptr = newtmp();
+        fprintf(tout, "  %s = load i8**, i8*** @w_argv\n", r);
+        var r2: ptr = newtmp();
+        fprintf(tout, "  %s = getelementptr i8*, i8** %s, i64 %s\n", r2, r, idx);
+        var r3: ptr = newtmp();
+        fprintf(tout, "  %s = load i8*, i8** %s\n", r3, r2);
+        setVal(r3, 0, "str", 0); return;
+    }
+    // count + collect args
+    var cfn: ptr = vfn;
+    var n: int = 0;
+    var args: ptr = (ptr)malloc(16 * 8);
+    var argt: ptr = (ptr)malloc(16 * 8);
+    if cur() != 41 {
+        while 1 == 1 {
+            assign();
+            args[n * 8] = (int)vreg;
+            argt[n * 8] = (int)vtype;
+            n = n + 1;
+            if cur() == 44 { adv(); } else { break; }
+        }
+    }
+    expect(41, "')'");
+    var rt: ptr = lltyp((ptr)f[FUN_RET]);
+    var isvoid: int = 0;
+    if strEq(rt, "void") != 0 { isvoid = 1; }
+    // emit coercion instructions for args before the call line
+    var cargs: ptr = (ptr)malloc((n + 1) * 8);
+    var i: int = 0;
+    var pts: ptr = (ptr)f[FUN_PTS];
+    while i < n {
+        var at: ptr;
+        if i < f[FUN_NP] { at = lltyp((ptr)pts[i * 8]); } else { at = lltyp((ptr)argt[i * 8]); }
+        var val: ptr = (ptr)args[i * 8];
+        var vty: ptr = (ptr)argt[i * 8];
+        if strEq(at, "i8*") != 0 && vty != 0 && isPtrType(vty) == 0 && isStructType(vty) == 0 {
+            var p: ptr = newtmp();
+            fprintf(tout, "  %s = inttoptr i64 %s to i8*\n", p, val);
+            cargs[i * 8] = (int)p;
+        } else {
+            cargs[i * 8] = (int)val;
+        }
+        i = i + 1;
+    }
+    var rr: ptr = 0;
+    if isvoid == 1 {
+        fprintf(tout, "  call void @%s(", cfn);
+    } else {
+        rr = newtmp();
+        fprintf(tout, "  %s = call %s @%s(", rr, rt, cfn);
+    }
+    i = 0;
+    while i < n {
+        if i > 0 { fprintf(tout, ", "); }
+        var at2: ptr;
+        if i < f[FUN_NP] { at2 = lltyp((ptr)pts[i * 8]); } else { at2 = lltyp((ptr)argt[i * 8]); }
+        fprintf(tout, "%s %s", at2, (ptr)cargs[i * 8]);
+        i = i + 1;
+    }
+    fprintf(tout, ")\n");
+    if isvoid == 1 { setVal(0, 0, "void", 0); } else { setVal(rr, 0, (ptr)f[FUN_RET], 0); }
+}

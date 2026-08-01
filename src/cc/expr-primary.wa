@@ -1,0 +1,67 @@
+// ---------------- expression parser -----------------------------------------
+fn primary() void {
+    var k: int = cur();
+    if k == TK_INT {
+        var r: ptr = newtmp();
+        fprintf(tout, "  %s = sext i32 %lld to i64\n", r, tokIval(tpos));
+        adv(); setVal(r, 0, "int", 0); return;
+    }
+    if k == TK_FLOAT {
+        var r: ptr = newtmp();
+        fprintf(tout, "  %s = fadd double 0.000000e+00, %s\n", r, tokText(tpos));
+        adv(); setVal(r, 0, "float", 0); return;
+    }
+    if k == TK_STR {
+        var id: int = sid; sid = sid + 1;
+        var g: ptr = (ptr)malloc(32);
+        snprintf(g, 32, "@.str%d", id);
+        var n: int = tokIval(tpos);
+        // build global constant definition
+        var def: ptr = sbNew();
+        var hdr: ptr = (ptr)malloc(128);
+        snprintf(hdr, 128, "  %s = private constant [%lld x i8] c\"", g, n + 1);
+        sbAppendCStr(def, hdr);
+        var tb: ptr = tokText(tpos);
+        var i: int = 0;
+        while i < n {
+            var cc: int = getbyte(tb + i);
+            if cc == 92 { sbAppendCStr(def, "\\5C"); }
+            elif cc == 34 { sbAppendCStr(def, "\\22"); }
+            elif cc == 10 { sbAppendCStr(def, "\\0A"); }
+            elif cc == 9 { sbAppendCStr(def, "\\09"); }
+            elif cc == 13 { sbAppendCStr(def, "\\0D"); }
+            elif cc >= 32 && cc < 127 { sbAppendChar(def, cc); }
+            else { var h: ptr = (ptr)malloc(8); snprintf(h, 8, "\\%02X", cc); sbAppendCStr(def, h); }
+            i = i + 1;
+        }
+        sbAppendCStr(def, "\\00\"\n");
+        sbAppendChar(def, 0);
+        strdefs = sbAppendToStrlist(strdefs, sbData(def));
+        nstr = nstr + 1;
+        var gp: ptr = newtmp();
+        var r: ptr = newtmp();
+        fprintf(tout, "  %s = getelementptr inbounds [%lld x i8], [%lld x i8]* %s, i64 0, i64 0\n", gp, n + 1, n + 1, g);
+        fprintf(tout, "  %s = bitcast i8* %s to i8*\n", r, gp);
+        adv(); setVal(r, 0, "str", 0); return;
+    }
+    if k == K_TRUE { var r: ptr = newtmp(); fprintf(tout, "  %s = icmp ne i64 1, 0\n", r); adv(); setVal(r, 0, "bool", 0); return; }
+    if k == K_FALSE { var r: ptr = newtmp(); fprintf(tout, "  %s = icmp eq i64 1, 0\n", r); adv(); setVal(r, 0, "bool", 0); return; }
+    if k == K_NULL { var r: ptr = newtmp(); fprintf(tout, "  %s = bitcast i64 0 to i8*\n", r); adv(); setVal(r, 0, "ptr", 0); return; }
+    if k == TK_IDENT {
+        var s: ptr = findall(curText());
+        if s == 0 { fprintf(tout, "wall: line %d: error: undefined identifier '%s'\n", curLine(), curText()); exit(1); }
+        if s[SYM_ISFUNC] != 0 { setVal(0, 0, "fn", (ptr)s[SYM_NAME]); adv(); return; }
+        if isStructType((ptr)s[SYM_TYP]) != 0 { setVal((ptr)s[SYM_LL], (ptr)s[SYM_LL], (ptr)s[SYM_TYP], 0); adv(); return; }
+        var r: ptr = newtmp();
+        var ll: ptr = lltyp((ptr)s[SYM_TYP]);
+        if strEq(ll, "void") { fprintf(tout, "wall: line %d: error: void value\n", curLine()); exit(1); }
+        fprintf(tout, "  %s = load %s, %s* %s\n", r, ll, ll, (ptr)s[SYM_LL]);
+        setVal(r, (ptr)s[SYM_LL], (ptr)s[SYM_TYP], 0);
+        adv(); return;
+    }
+    if k == 40 { // '('
+        adv(); assign(); expect(41, "')'"); return;
+    }
+    fprintf(tout, "wall: line %d: error: unexpected token '%s'\n", curLine(), curText());
+    exit(1);
+}

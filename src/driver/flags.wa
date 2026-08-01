@@ -1,0 +1,564 @@
+// ============================================================================
+// WALL DRIVER MODULE: flags.wa  -- data-driven option table & parsing
+// ----------------------------------------------------------------------------
+// Wall accepts a large, user-extensible set of command-line options. Rather
+// than a hard-coded if/else chain, options are described by a table of
+// flag-definition records. Each record maps a flag name (with optional '*'
+// wildcard) to a ROLE (an action id) and a human description.
+//
+// Two sources feed the table:
+//   1. A built-in table (below) with ~100 common flags.
+//   2. An optional user config file (conf/wall.flags) that can add more.
+//
+// Roles are integer codes so the main driver can dispatch on them cheaply.
+// Some roles consume a following argument (e.g. -o FILE, -L DIR, -fsanitize=X).
+// Wildcard roles match the flag against the glob pattern of the definition.
+// ============================================================================
+
+// ---------------- role codes -------------------------------------------------
+let R_NONE     = 0;   // recognized but no action
+let R_HELP     = 1;   // print help
+let R_VERSION  = 2;   // print version
+let R_VERBOSE  = 3;   // -v: show commands
+let R_OPTLVL0  = 4;   // -O0
+let R_OPTLVL1  = 5;   // -O1
+let R_OPTLVL2  = 6;   // -O2
+let R_OPTLVL3  = 7;   // -O3
+let R_OPTLVLS  = 8;   // -Os (size)
+let R_OPTLVLZ  = 9;   // -Oz (smallest)
+let R_OBJ      = 10;  // -c: emit object, no link
+let R_ASM      = 11;  // -S: emit assembly
+let R_IR       = 12;  // -emit-llvm: emit IR
+let R_SHARED   = 13;  // -shared: build .so
+let R_PIC      = 14;  // -fPIC/-fpic
+let R_NO_PIE   = 15;  // -no-pie
+let R_PIE      = 16;  // -pie
+let R_NOLINK   = 17;  // -nostdlib: do not link crt/libc
+let R_NOWARN   = 18;  // -w
+let R_WERROR   = 19;  // -Werror
+let R_WARNALL  = 20;  // -Wall
+let R_COLOR    = 21;  // -fcolor
+let R_NOCOLOR  = 22;  // -fno-color
+let R_OUT      = 23;  // -o <file>: consumes next arg
+let R_LINKLIB  = 24;  // -l<lib>
+let R_LIBDIR   = 25;  // -L<dir>
+let R_LINKFLAG = 26;  // -Wl,<flag>
+let R_SANITIZE = 27;  // -fsanitize=<name>
+let R_SAVETMP  = 28;  // -save-temps
+let R_DEBUG    = 29;  // -g: emit debug info
+let R_OPTARG   = 30;  // -mllvm <arg>: pass to opt/llc
+let R_DEFINE   = 31;  // -D<name>: preprocessor define
+let R_INCLUDE  = 32;  // -I<dir>: include dir
+let R_STATIC   = 33;  // -static
+let R_OPENMP   = 34;  // -fopenmp
+let R_FASTMATH = 35;  // -ffast-math
+let R_NOCOLORW = 36;  // internal alias
+let R_RUN      = 37;  // run mode
+let R_BUILD    = 38;  // build mode (default)
+let R_LTO      = 39;  // -flto
+let R_PTHREAD  = 40;  // -pthread
+let R_UNSAFE   = 41;  // -fno-omit-frame-pointer (debug helper)
+let R_VERBOSEX = 42;  // -v combined alias
+// ---- LLVM pass-through options -------------------------------------------
+// Each of these appends a real LLVM/backend argument to the corresponding
+// tool's command line via the optargs/llcargs/linkargs/mllargs accumulators.
+let R_OPTARGV  = 43;  // opt pass-through: append literal arg to `opt`
+let R_LLCARGV  = 44;  // llc pass-through: append literal arg to `llc`
+let R_LINKARGV = 45;  // link pass-through: append literal arg to `ld.lld`
+let R_MLLARGV  = 46;  // -mllvm pass-through: append literal arg to both
+
+// ---------------- option state ------------------------------------------------
+// NOTE: all option-state globals (optlevel, verbose, mode, src, output, ...)
+// and the `flags` table head are defined in contract.wa.
+
+// ---------------- flag-definition records --------------------------------------
+// A flag node: next(0) pattern(8) role(16) desc(24)  = 32 bytes
+let FL_NEXT = 0; let FL_PAT = 8; let FL_ROLE = 16; let FL_DESC = 24;
+
+fn addFlag(pat: str, role: int, desc: str) void {
+    var n: ptr = (ptr)malloc(32);
+    n[FL_PAT] = (int)pat;
+    n[FL_ROLE] = role;
+    n[FL_DESC] = (int)desc;
+    n[FL_NEXT] = (int)flags;
+    flags = n;
+}
+
+// ----------------------------------------------------------------------------
+// copyStrRaw: duplicate a builder buffer into fresh heap storage.
+fn copyStrRaw(s: ptr) ptr {
+    var n: int = strlen(s);
+    var p: ptr = (ptr)malloc(n + 1);
+    memcpy(p, s, n + 1);
+    return p;
+}
+
+// ----------------------------------------------------------------------------
+// appendArg: append a literal argument (with a leading space) to a tool's
+// extra-argument accumulator. accum is a `ptr*`; pass &accum address semantics
+// by using a helper per accumulator. Keeps a plain NULL-terminated string.
+// ----------------------------------------------------------------------------
+fn appendOptArg(a: str) void { bInit(); if optargs != 0 { bCat(optargs); } bCat(" "); bCat(a); optargs = copyStrRaw(bbuf); }
+fn appendLlcArg(a: str) void { bInit(); if llcargs != 0 { bCat(llcargs); } bCat(" "); bCat(a); llcargs = copyStrRaw(bbuf); }
+fn appendLinkArg(a: str) void { bInit(); if linkargs != 0 { bCat(linkargs); } bCat(" "); bCat(a); linkargs = copyStrRaw(bbuf); }
+fn appendMllArg(a: str) void {
+    bInit(); if mllargs != 0 { bCat(mllargs); } bCat(" "); bCat(a); mllargs = copyStrRaw(bbuf);
+    bInit(); if llcargs != 0 { bCat(llcargs); } bCat(" "); bCat(a); llcargs = copyStrRaw(bbuf);
+}
+
+// ----------------------------------------------------------------------------
+// initFlags: register the built-in flag table. Every flag has a documented
+// role and a short description (used by --help).
+// ----------------------------------------------------------------------------
+fn initFlags() void {
+    // informational
+    addFlag("--help", R_HELP, "print this help and exit");
+    addFlag("-h", R_HELP, "alias for --help");
+    addFlag("--version", R_VERSION, "print version information and exit");
+    // optimization levels
+    addFlag("-O0", R_OPTLVL0, "disable optimizations");
+    addFlag("-O1", R_OPTLVL1, "optimize for speed (moderate)");
+    addFlag("-O2", R_OPTLVL2, "optimize for speed (default)");
+    addFlag("-O3", R_OPTLVL3, "optimize aggressively");
+    addFlag("-Os", R_OPTLVLS, "optimize for size");
+    addFlag("-Oz", R_OPTLVLZ, "optimize for minimum size");
+    addFlag("-O", R_OPTLVL2, "alias for -O2");
+    // output control
+    addFlag("-o", R_OUT, "write output to <file>");
+    addFlag("-c", R_OBJ, "compile to object only (no link)");
+    addFlag("--emit-obj", R_OBJ, "alias for -c");
+    addFlag("-S", R_ASM, "emit assembly only (no assemble)");
+    addFlag("-emit-llvm", R_IR, "emit LLVM IR only");
+    addFlag("-save-temps", R_SAVETMP, "keep intermediate files");
+    // verbosity / diagnostics
+    addFlag("-v", R_VERBOSE, "show commands as they run");
+    addFlag("--verbose", R_VERBOSE, "alias for -v");
+    addFlag("-w", R_NOWARN, "suppress all warnings");
+    addFlag("-Wall", R_WARNALL, "enable all warnings");
+    addFlag("-Werror", R_WERROR, "treat warnings as errors");
+    addFlag("-fcolor", R_COLOR, "force colored diagnostics");
+    addFlag("-fno-color", R_NOCOLOR, "disable colored diagnostics");
+    addFlag("-fno-omit-frame-pointer", R_UNSAFE, "keep frame pointer");
+    // linking modes
+    addFlag("-shared", R_SHARED, "build a shared library (.so)");
+    addFlag("-static", R_STATIC, "link statically (best effort)");
+    addFlag("-fPIC", R_PIC, "position-independent code");
+    addFlag("-fpic", R_PIC, "position-independent code");
+    addFlag("-pie", R_PIE, "build a position-independent executable");
+    addFlag("-no-pie", R_NO_PIE, "do not build a PIE");
+    addFlag("-nostdlib", R_NOLINK, "do not link crt/libc (object only)");
+    addFlag("-pthread", R_PTHREAD, "link with pthread support");
+    addFlag("-flto", R_LTO, "enable link-time optimization");
+    addFlag("-ffast-math", R_FASTMATH, "enable fast-math optimizations");
+    addFlag("-fopenmp", R_OPENMP, "enable OpenMP support");
+    // link / include options (argument forms handled in driver)
+    addFlag("-l", R_LINKLIB, "link against library -l<lib>");
+    addFlag("-L", R_LIBDIR, "add library search dir -L<dir>");
+    addFlag("-Wl,", R_LINKFLAG, "pass <flag> to the linker -Wl,<flag>");
+    addFlag("-I", R_INCLUDE, "add include dir -I<dir>");
+    addFlag("-D", R_DEFINE, "define -D<name>");
+    addFlag("-fsanitize=", R_SANITIZE, "enable sanitizer -fsanitize=<name>");
+    addFlag("-g", R_DEBUG, "generate debug information");
+    addFlag("-mllvm", R_OPTARG, "pass <arg> to the LLVM backend");
+    // modes
+    addFlag("run", R_RUN, "compile and run <file>");
+    addFlag("build", R_BUILD, "build executable (default)");
+    addFlag("obj", R_OBJ, "compile to object only");
+    // aliases for convenience
+    addFlag("-v", R_VERBOSEX, "verbose + version alias");
+
+    // ========================================================================
+    // LLVM OPTIMIZATION PASS-THROUGH OPTIONS (50+)
+    // Each maps to a real LLVM/backend flag appended to the relevant tool.
+    // ------------------------------------------------------------------------
+    // opt options (passes / optimization pipeline)
+    addFlag("-mllvm-opt", R_OPTARGV, "append an arg to `opt`");
+    addFlag("-fvectorize", R_OPTARGV, "opt: enable loop vectorizer");
+    addFlag("-fno-vectorize", R_OPTARGV, "opt: disable loop vectorizer");
+    addFlag("-fslp-vectorize", R_OPTARGV, "opt: enable SLP vectorizer");
+    addFlag("-floop-unroll", R_OPTARGV, "opt: enable loop unrolling");
+    addFlag("-floop-rotate", R_OPTARGV, "opt: enable loop rotation");
+    addFlag("-floop-unroll-and-jam", R_OPTARGV, "opt: unroll and jam loops");
+    addFlag("-finline", R_OPTARGV, "opt: enable function inlining");
+    addFlag("-fno-inline", R_OPTARGV, "opt: disable function inlining");
+    addFlag("-fmerge-functions", R_OPTARGV, "opt: merge identical functions");
+    addFlag("-fno-merge-functions", R_OPTARGV, "opt: disable function merging");
+    addFlag("-fwhole-program", R_OPTARGV, "opt: enable whole-program analysis");
+    addFlag("-fglobalopt", R_OPTARGV, "opt: global optimizer pass");
+    addFlag("-fgvn", R_OPTARGV, "opt: global value numbering");
+    addFlag("-fmem2reg", R_OPTARGV, "opt: promote memory to registers");
+    addFlag("-finstcombine", R_OPTARGV, "opt: instruction combining");
+    addFlag("-fsccp", R_OPTARGV, "opt: sparse conditional constant prop");
+    addFlag("-fdce", R_OPTARGV, "opt: dead code elimination");
+    addFlag("-fsimplifycfg", R_OPTARGV, "opt: simplify the CFG");
+    addFlag("-ftailcall", R_OPTARGV, "opt: turn tail calls into jumps");
+    addFlag("-fno-tail-call", R_OPTARGV, "opt: disable tail call optimization");
+    addFlag("-fsroa", R_OPTARGV, "opt: scalar replacement of aggregates");
+    addFlag("-fjump-threading", R_OPTARGV, "opt: jump threading pass");
+    addFlag("-flibcall-opt", R_OPTARGV, "opt: libcall optimization");
+    addFlag("-ffunc-attrs", R_OPTARGV, "opt: infer function attributes");
+    addFlag("-fopt-licm", R_OPTARGV, "opt: loop-invariant code motion");
+    addFlag("-fopt-indvars", R_OPTARGV, "opt: canonicalize induction vars");
+    addFlag("-fopt-gvn", R_OPTARGV, "opt: GVN pass");
+    addFlag("-fopt-loop-idom", R_OPTARGV, "opt: loop idom pass");
+    addFlag("-fopt-reassociate", R_OPTARGV, "opt: reassociate expressions");
+    addFlag("-fopt-strip-dead", R_OPTARGV, "opt: strip dead prototypes");
+    addFlag("-fopt-cleanup", R_OPTARGV, "opt: cleanup CFG");
+    addFlag("-fcoroutines", R_OPTARGV, "opt: enable coroutine lowering");
+    addFlag("-fno-coroutines", R_OPTARGV, "opt: disable coroutine lowering");
+
+    // llc options (code generation)
+    addFlag("-mllvm-llc", R_LLCARGV, "append an arg to `llc`");
+    addFlag("-march", R_LLCARGV, "llc: target architecture");
+    addFlag("-mtune", R_LLCARGV, "llc: CPU tuning");
+    addFlag("-mcpu", R_LLCARGV, "llc: target CPU");
+    addFlag("-mattr", R_LLCARGV, "llc: target features");
+    addFlag("-mfloat-abi", R_LLCARGV, "llc: float ABI (hard/soft)");
+    addFlag("-mregalloc", R_LLCARGV, "llc: register allocator");
+    addFlag("-mrelocation-model", R_LLCARGV, "llc: relocation model");
+    addFlag("-mcode-model", R_LLCARGV, "llc: code model (small/large)");
+    addFlag("-mtls-model", R_LLCARGV, "llc: TLS model");
+    addFlag("-fno-plt", R_LLCARGV, "llc: no PLT for calls");
+    addFlag("-fomit-frame-pointer", R_LLCARGV, "llc: omit frame pointers");
+    addFlag("-mstack-alignment", R_LLCARGV, "llc: stack alignment");
+    addFlag("-msoft-float", R_LLCARGV, "llc: software floating point");
+    addFlag("-fno-implicit-float", R_LLCARGV, "llc: no implicit FP");
+
+    // ld.lld options
+    addFlag("-mllvm-link", R_LINKARGV, "append an arg to `ld.lld`");
+    addFlag("-Wl,-zrelax", R_LINKARGV, "link: enable relaxations");
+    addFlag("-Wl,-znoexecstack", R_LINKARGV, "link: non-executable stack");
+    addFlag("-Wl,-zexecstack", R_LINKARGV, "link: executable stack");
+    addFlag("-Wl,-Bsymbolic", R_LINKARGV, "link: bind symbols locally");
+    addFlag("-Wl,--icf=all", R_LINKARGV, "link: identical code folding");
+    addFlag("-Wl,--no-icf", R_LINKARGV, "link: disable ICF");
+    addFlag("-Wl,--gc-sections", R_LINKARGV, "link: garbage-collect sections");
+    addFlag("-Wl,--no-gc-sections", R_LINKARGV, "link: keep all sections");
+    addFlag("-Wl,-znow", R_LINKARGV, "link: immediate binding (now)");
+    addFlag("-Wl,-zlazy", R_LINKARGV, "link: lazy binding");
+    addFlag("-Wl,--as-needed", R_LINKARGV, "link: only link needed libs");
+    addFlag("-Wl,--no-as-needed", R_LINKARGV, "link: link all needed libs");
+    addFlag("-Wl,-rpath,", R_LINKARGV, "link: set runtime path");
+    addFlag("-Wl,-zdefs", R_LINKARGV, "link: reject undefined symbols");
+    addFlag("-Wl,-znodefaultlibs", R_LINKARGV, "link: no default libs");
+
+    // -mllvm options passed to both opt and llc
+    addFlag("-mllvm-passes", R_MLLARGV, "mllvm: run custom pass list");
+    addFlag("-mllvm-disable-lsr", R_MLLARGV, "mllvm: disable loop strength reduction");
+    addFlag("-mllvm-enable-verify", R_MLLARGV, "mllvm: verify IR after passes");
+    addFlag("-mllvm-print-ir", R_MLLARGV, "mllvm: print IR after passes");
+
+    // ---- extended pass-through options -------------------------------------
+    // opt (extra passes)
+    addFlag("-fconstprop", R_OPTARGV, "opt: constant propagation");
+    addFlag("-falways-inline", R_OPTARGV, "opt: inline everything at -O2");
+    addFlag("-fadce", R_OPTARGV, "opt: aggressive dead code elimination");
+    addFlag("-fgdce", R_OPTARGV, "opt: global dead code elimination");
+    addFlag("-fgvn-hoist", R_OPTARGV, "opt: GVN-hoist pass");
+    addFlag("-floop-distribute", R_OPTARGV, "opt: loop distribution");
+    addFlag("-floop-interchange", R_OPTARGV, "opt: loop interchange");
+    addFlag("-fipsccp", R_OPTARGV, "opt: interprocedural SCCP");
+    addFlag("-fpartial-inline", R_OPTARGV, "opt: partial inlining");
+    addFlag("-fearlycse", R_OPTARGV, "opt: early common subexpression elimination");
+    addFlag("-faggressive-instcombine", R_OPTARGV, "opt: aggressive instcombine");
+    addFlag("-fvectorize-width=2", R_OPTARGV, "opt: vectorize to width 2");
+    // llc (backend tuning)
+    addFlag("-mabicalls", R_LLCARGV, "llc: enable ABI calls");
+    addFlag("-mnoabicalls", R_LLCARGV, "llc: disable ABI calls");
+    addFlag("-mred-zone", R_LLCARGV, "llc: enable red zone");
+    addFlag("-mnored-zone", R_LLCARGV, "llc: disable red zone");
+    addFlag("-mstackrealign", R_LLCARGV, "llc: force stack realignment");
+    addFlag("-mstrict-align", R_LLCARGV, "llc: strict alignment");
+    addFlag("-mcjump-table", R_LLCARGV, "llc: emit compact jump tables");
+    addFlag("-mlong-calls", R_LLCARGV, "llc: allow long calls");
+    addFlag("-mcall-abi", R_LLCARGV, "llc: call ABI (hard/soft)");
+    // ld.lld (linker)
+    addFlag("-Wl,--strip-all", R_LINKARGV, "link: strip all symbols");
+    addFlag("-Wl,--strip-debug", R_LINKARGV, "link: strip debug info");
+    addFlag("-Wl,-s", R_LINKARGV, "link: strip symbols");
+    addFlag("-Wl,-zrelro", R_LINKARGV, "link: RELRO segments");
+    addFlag("-Wl,-znorelro", R_LINKARGV, "link: disable RELRO");
+    addFlag("-Wl,--no-undefined", R_LINKARGV, "link: reject undefined symbols");
+    addFlag("-Wl,-O2", R_LINKARGV, "link: optimize at link time");
+    addFlag("-Wl,--sort-section=name", R_LINKARGV, "link: sort sections by name");
+    // -mllvm extras
+    addFlag("-mllvm-time-passes", R_MLLARGV, "mllvm: time each pass");
+    addFlag("-mllvm-stats", R_MLLARGV, "mllvm: print pass statistics");
+    addFlag("-mllvm-debug", R_MLLARGV, "mllvm: enable debug output");
+    addFlag("-mllvm-print-ir-opt", R_MLLARGV, "mllvm: print IR after each pass");
+}
+
+// ----------------------------------------------------------------------------
+// loadFlagFile: append definitions from a user config file. Each non-comment,
+// non-blank line has form:  FLAG ROLE[:value] "description"
+// Roles are mapped by name into role codes so custom flags can trigger
+// real behaviors (see roleName below). Wildcards ('*') are allowed in FLAG.
+// ----------------------------------------------------------------------------
+fn loadFlagFile(path: str) int {
+    var f: ptr = fopen(path, "rb");
+    if f == 0 { return 0; }
+    // read the whole file into a buffer
+    var cap: int = 4096;
+    var buf: ptr = (ptr)malloc(cap);
+    var n: int = 0;
+    while 1 == 1 {
+        if n + 1024 > cap {
+            while n + 1024 > cap { cap = cap * 2; }
+            buf = (ptr)realloc(buf, cap);
+        }
+        var got: int = fread(buf + n, 1, 1024, f);
+        if got <= 0 { break; }
+        n = n + got;
+    }
+    fclose(f);
+    if n == 0 { return 1; }
+
+    // Simple line-based tokenizer. Each line yields up to 3 whitespace
+    // separated tokens:  PATTERN  ROLE  "DESC" (desc may be quoted).
+    var pat: ptr = (ptr)malloc(128);
+    var role: ptr = (ptr)malloc(64);
+    var desc: ptr = (ptr)malloc(256);
+    var i: int = 0;
+    var any: int = 0;
+    while i < n {
+        // skip leading whitespace / newlines
+        while i < n && (getbyte(buf + i) == 32 || getbyte(buf + i) == 9 || getbyte(buf + i) == 10 || getbyte(buf + i) == 13) { i = i + 1; }
+        if i >= n { break; }
+        // comment line -> skip to newline
+        if getbyte(buf + i) == 35 {
+            while i < n && getbyte(buf + i) != 10 { i = i + 1; }
+            continue;
+        }
+        // token 1: pattern
+        var pi: int = 0;
+        while i < n && getbyte(buf + i) != 32 && getbyte(buf + i) != 9 && getbyte(buf + i) != 10 && getbyte(buf + i) != 13 {
+            setbyte(pat + pi, getbyte(buf + i)); pi = pi + 1; i = i + 1;
+        }
+        setbyte(pat + pi, 0);
+        // token 2: role
+        while i < n && (getbyte(buf + i) == 32 || getbyte(buf + i) == 9) { i = i + 1; }
+        var ri: int = 0;
+        while i < n && getbyte(buf + i) != 32 && getbyte(buf + i) != 9 && getbyte(buf + i) != 10 && getbyte(buf + i) != 13 {
+            setbyte(role + ri, getbyte(buf + i)); ri = ri + 1; i = i + 1;
+        }
+        setbyte(role + ri, 0);
+        // token 3: description (optional; may be quoted)
+        while i < n && (getbyte(buf + i) == 32 || getbyte(buf + i) == 9) { i = i + 1; }
+        var di: int = 0;
+        if i < n && getbyte(buf + i) == 34 {
+            i = i + 1;
+            while i < n && getbyte(buf + i) != 34 { setbyte(desc + di, getbyte(buf + i)); di = di + 1; i = i + 1; }
+            if i < n { i = i + 1; }
+        } else {
+            while i < n && getbyte(buf + i) != 10 && getbyte(buf + i) != 13 {
+                setbyte(desc + di, getbyte(buf + i)); di = di + 1; i = i + 1;
+            }
+        }
+        setbyte(desc + di, 0);
+        // register if we have a pattern and role. The token buffers are
+        // reused across lines, so copy each token into a fresh allocation
+        // before storing it in the flag record.
+        if pi > 0 {
+            var rc: int = roleName(role);
+            if rc != R_NONE {
+                var npat: ptr = (ptr)malloc(pi + 1);
+                memcpy(npat, pat, pi + 1);
+                var ndesc: ptr = (ptr)malloc(di + 1);
+                memcpy(ndesc, desc, di + 1);
+                addFlag((str)npat, rc, (str)ndesc);
+                any = any + 1;
+            }
+        }
+        // skip to end of line
+        while i < n && getbyte(buf + i) != 10 { i = i + 1; }
+    }
+    return any;
+}
+
+// ----------------------------------------------------------------------------
+// optArgFor / llcArgFor / linkArgFor / mllArgFor: translate a friendly Wall
+// flag (matched by matchFlag) into the literal LLVM-tool argument appended to
+// the corresponding tool's command line. Each returns a literal string.
+// ----------------------------------------------------------------------------
+fn optArgFor(a: str) str {
+    // pass-through that already looks like a flag -> forward as-is
+    if strcmp(a, "-mllvm-opt") == 0 { return ""; }
+    if strcmp(a, "-fvectorize") == 0 { return "-vectorize-loops"; }
+    if strcmp(a, "-fno-vectorize") == 0 { return "-no-vectorize-loops"; }
+    if strcmp(a, "-fslp-vectorize") == 0 { return "-vectorize-slp"; }
+    if strcmp(a, "-floop-unroll") == 0 { return "-loop-unroll"; }
+    if strcmp(a, "-floop-rotate") == 0 { return "-loop-rotate"; }
+    if strcmp(a, "-floop-unroll-and-jam") == 0 { return "-loop-unroll-and-jam"; }
+    if strcmp(a, "-finline") == 0 { return "-inline"; }
+    if strcmp(a, "-fno-inline") == 0 { return "-no-inline"; }
+    if strcmp(a, "-fmerge-functions") == 0 { return "-mergefunc"; }
+    if strcmp(a, "-fno-merge-functions") == 0 { return "-no-mergefunc"; }
+    if strcmp(a, "-fwhole-program") == 0 { return "-whole-program"; }
+    if strcmp(a, "-fglobalopt") == 0 { return "-globalopt"; }
+    if strcmp(a, "-fgvn") == 0 { return "-gvn"; }
+    if strcmp(a, "-fmem2reg") == 0 { return "-mem2reg"; }
+    if strcmp(a, "-finstcombine") == 0 { return "-instcombine"; }
+    if strcmp(a, "-fsccp") == 0 { return "-sccp"; }
+    if strcmp(a, "-fdce") == 0 { return "-dce"; }
+    if strcmp(a, "-fsimplifycfg") == 0 { return "-simplifycfg"; }
+    if strcmp(a, "-ftailcall") == 0 { return "-tailcallelim"; }
+    if strcmp(a, "-fno-tail-call") == 0 { return "-no-tailcallelim"; }
+    if strcmp(a, "-fsroa") == 0 { return "-sroa"; }
+    if strcmp(a, "-fjump-threading") == 0 { return "-jump-threading"; }
+    if strcmp(a, "-flibcall-opt") == 0 { return "-libcall-opt"; }
+    if strcmp(a, "-ffunc-attrs") == 0 { return "-function-attrs"; }
+    if strcmp(a, "-fopt-licm") == 0 { return "-licm"; }
+    if strcmp(a, "-fopt-indvars") == 0 { return "-indvars"; }
+    if strcmp(a, "-fopt-gvn") == 0 { return "-gvn"; }
+    if strcmp(a, "-fopt-loop-idom") == 0 { return "-loop-idom"; }
+    if strcmp(a, "-fopt-reassociate") == 0 { return "-reassociate"; }
+    if strcmp(a, "-fopt-strip-dead") == 0 { return "-strip-dead-prototypes"; }
+    if strcmp(a, "-fopt-cleanup") == 0 { return "-cleanup-cfg"; }
+    if strcmp(a, "-fcoroutines") == 0 { return "-enable-coroutines"; }
+    if strcmp(a, "-fno-coroutines") == 0 { return "-disable-coroutines"; }
+    if strcmp(a, "-fconstprop") == 0 { return "-constprop"; }
+    if strcmp(a, "-falways-inline") == 0 { return "-always-inline"; }
+    if strcmp(a, "-fadce") == 0 { return "-adce"; }
+    if strcmp(a, "-fgdce") == 0 { return "-globaldce"; }
+    if strcmp(a, "-fgvn-hoist") == 0 { return "-gvn-hoist"; }
+    if strcmp(a, "-floop-distribute") == 0 { return "-loop-distribute"; }
+    if strcmp(a, "-floop-interchange") == 0 { return "-loop-interchange"; }
+    if strcmp(a, "-fipsccp") == 0 { return "-ipsccp"; }
+    if strcmp(a, "-fpartial-inline") == 0 { return "-partial-inliner"; }
+    if strcmp(a, "-fearlycse") == 0 { return "-early-cse"; }
+    if strcmp(a, "-faggressive-instcombine") == 0 { return "-aggressive-instcombine"; }
+    if strcmp(a, "-fvectorize-width=2") == 0 { return "-vectorize-width=2"; }
+    return "";
+}
+
+fn llcArgFor(a: str) str {
+    if strcmp(a, "-mllvm-llc") == 0 { return ""; }
+    if strcmp(a, "-march") == 0 { return "-march=aarch64"; }
+    if strcmp(a, "-mtune") == 0 { return "-mtune=generic"; }
+    if strcmp(a, "-mcpu") == 0 { return "-mcpu=generic"; }
+    if strcmp(a, "-mattr") == 0 { return "-mattr=+crc,+crypto"; }
+    if strcmp(a, "-mfloat-abi") == 0 { return "-mfloat-abi=hard"; }
+    if strcmp(a, "-mregalloc") == 0 { return "-regalloc=greedy"; }
+    if strcmp(a, "-mrelocation-model") == 0 { return "-relocation-model=pic"; }
+    if strcmp(a, "-mcode-model") == 0 { return "-code-model=small"; }
+    if strcmp(a, "-mtls-model") == 0 { return "-tls-model=general-dynamic"; }
+    if strcmp(a, "-fno-plt") == 0 { return "-fno-plt"; }
+    if strcmp(a, "-fomit-frame-pointer") == 0 { return "-frame-pointer=all"; }
+    if strcmp(a, "-mstack-alignment") == 0 { return "-stack-alignment=16"; }
+    if strcmp(a, "-msoft-float") == 0 { return "-msoft-float"; }
+    if strcmp(a, "-fno-implicit-float") == 0 { return "-no-implicit-float"; }
+    if strcmp(a, "-mabicalls") == 0 { return "-abicalls"; }
+    if strcmp(a, "-mnoabicalls") == 0 { return "-no-abicalls"; }
+    if strcmp(a, "-mred-zone") == 0 { return "-red-zone"; }
+    if strcmp(a, "-mnored-zone") == 0 { return "-no-red-zone"; }
+    if strcmp(a, "-mstackrealign") == 0 { return "-stackrealign"; }
+    if strcmp(a, "-mstrict-align") == 0 { return "-mno-strict-align"; }
+    if strcmp(a, "-mcjump-table") == 0 { return "-jump-table-type=block"; }
+    if strcmp(a, "-mlong-calls") == 0 { return "-long-call-opt"; }
+    if strcmp(a, "-mcall-abi") == 0 { return "-call-abi=hard"; }
+    return "";
+}
+
+fn linkArgFor(a: str) str {
+    if strcmp(a, "-mllvm-link") == 0 { return ""; }
+    if strcmp(a, "-Wl,-zrelax") == 0 { return "-z relax"; }
+    if strcmp(a, "-Wl,-znoexecstack") == 0 { return "-z noexecstack"; }
+    if strcmp(a, "-Wl,-zexecstack") == 0 { return "-z execstack"; }
+    if strcmp(a, "-Wl,-Bsymbolic") == 0 { return "-Bsymbolic"; }
+    if strcmp(a, "-Wl,--icf=all") == 0 { return "--icf=all"; }
+    if strcmp(a, "-Wl,--no-icf") == 0 { return "--no-icf"; }
+    if strcmp(a, "-Wl,--gc-sections") == 0 { return "--gc-sections"; }
+    if strcmp(a, "-Wl,--no-gc-sections") == 0 { return "--no-gc-sections"; }
+    if strcmp(a, "-Wl,-znow") == 0 { return "-z now"; }
+    if strcmp(a, "-Wl,-zlazy") == 0 { return "-z lazy"; }
+    if strcmp(a, "-Wl,--as-needed") == 0 { return "--as-needed"; }
+    if strcmp(a, "-Wl,--no-as-needed") == 0 { return "--no-as-needed"; }
+    if strcmp(a, "-Wl,-rpath,") == 0 { return "-rpath"; }
+    if strcmp(a, "-Wl,-zdefs") == 0 { return "-z defs"; }
+    if strcmp(a, "-Wl,-znodefaultlibs") == 0 { return "-nodefaultlibs"; }
+    if strcmp(a, "-Wl,--strip-all") == 0 { return "--strip-all"; }
+    if strcmp(a, "-Wl,--strip-debug") == 0 { return "--strip-debug"; }
+    if strcmp(a, "-Wl,-s") == 0 { return "-s"; }
+    if strcmp(a, "-Wl,-zrelro") == 0 { return "-z relro"; }
+    if strcmp(a, "-Wl,-znorelro") == 0 { return "-z norelro"; }
+    if strcmp(a, "-Wl,--no-undefined") == 0 { return "--no-undefined"; }
+    if strcmp(a, "-Wl,-O2") == 0 { return "-O2"; }
+    if strcmp(a, "-Wl,--sort-section=name") == 0 { return "--sort-section=name"; }
+    return "";
+}
+
+fn mllArgFor(a: str) str {
+    if strcmp(a, "-mllvm-passes") == 0 { return "-passes=default"; }
+    if strcmp(a, "-mllvm-disable-lsr") == 0 { return "-disable-lsr"; }
+    if strcmp(a, "-mllvm-enable-verify") == 0 { return "-verify"; }
+    if strcmp(a, "-mllvm-print-ir") == 0 { return "-print-after-all"; }
+    if strcmp(a, "-mllvm-time-passes") == 0 { return "-time-passes"; }
+    if strcmp(a, "-mllvm-stats") == 0 { return "-stats"; }
+    if strcmp(a, "-mllvm-debug") == 0 { return "-debug"; }
+    if strcmp(a, "-mllvm-print-ir-opt") == 0 { return "-print-after-all"; }
+    return "";
+}
+
+// ----------------------------------------------------------------------------
+// roleName: map a textual role from the config file to a role code.
+// Returns R_NONE for unknown names.
+// ----------------------------------------------------------------------------
+fn roleName(r: ptr) int {    if strcmp(r, "help") == 0 { return R_HELP; }
+    if strcmp(r, "version") == 0 { return R_VERSION; }
+    if strcmp(r, "verbose") == 0 { return R_VERBOSE; }
+    if strcmp(r, "optlevel0") == 0 { return R_OPTLVL0; }
+    if strcmp(r, "optlevel1") == 0 { return R_OPTLVL1; }
+    if strcmp(r, "optlevel2") == 0 { return R_OPTLVL2; }
+    if strcmp(r, "optlevel3") == 0 { return R_OPTLVL3; }
+    if strcmp(r, "optsize") == 0 { return R_OPTLVLS; }
+    if strcmp(r, "optz") == 0 { return R_OPTLVLZ; }
+    if strcmp(r, "emitobj") == 0 { return R_OBJ; }
+    if strcmp(r, "emitasm") == 0 { return R_ASM; }
+    if strcmp(r, "emitir") == 0 { return R_IR; }
+    if strcmp(r, "shared") == 0 { return R_SHARED; }
+    if strcmp(r, "pic") == 0 { return R_PIC; }
+    if strcmp(r, "nopie") == 0 { return R_NO_PIE; }
+    if strcmp(r, "pie") == 0 { return R_PIE; }
+    if strcmp(r, "nolink") == 0 { return R_NOLINK; }
+    if strcmp(r, "nowarn") == 0 { return R_NOWARN; }
+    if strcmp(r, "werror") == 0 { return R_WERROR; }
+    if strcmp(r, "warnall") == 0 { return R_WARNALL; }
+    if strcmp(r, "color") == 0 { return R_COLOR; }
+    if strcmp(r, "nocolor") == 0 { return R_NOCOLOR; }
+    if strcmp(r, "out:next") == 0 { return R_OUT; }
+    if strcmp(r, "san") == 0 { return R_SANITIZE; }
+    if strcmp(r, "debug") == 0 { return R_DEBUG; }
+    return R_NONE;
+}
+
+// ----------------------------------------------------------------------------
+// matchFlag: find the first flag definition whose pattern matches the given
+// argument. Wildcard support: if the pattern contains '*', we match a prefix
+// (everything up to '*') and ignore the rest; otherwise an exact match is
+// required. Returns the role code, or R_NONE if no flag matches.
+// ----------------------------------------------------------------------------
+fn matchFlag(a: str) int {
+    var f: ptr = flags;
+    while f != 0 {
+        var pat: str = (str)f[FL_PAT];
+        var plen: int = strlen(pat);
+        var hasstar: int = 0;
+        var si: int = 0;
+        while si < plen { if getbyte(pat + si) == 42 { hasstar = 1; } si = si + 1; }
+        if hasstar == 1 {
+            // prefix match up to the '*'
+            var cmp: int = 0;
+            var i: int = 0;
+            while i < plen {
+                if getbyte(pat + i) == 42 { break; }
+                if getbyte(pat + i) != getbyte(a + i) { cmp = 1; break; }
+                i = i + 1;
+            }
+            if cmp == 0 { return f[FL_ROLE]; }
+        } else {
+            if strcmp(pat, a) == 0 { return f[FL_ROLE]; }
+        }
+        f = (ptr)f[FL_NEXT];
+    }
+    return R_NONE;
+}

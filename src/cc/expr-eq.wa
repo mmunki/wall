@@ -1,0 +1,17 @@
+fn equality() void {
+    relational();
+    while 1 == 1 {
+        var k: int = cur();
+        if k == TK_EQEQ || k == TK_NE || k == TK_TRIPLEEQ || k == TK_TRIPLENE {
+            adv();
+            var save: ptr = vreg; var savet: ptr = vtype;
+            relational();
+            var l: ptr = coerceInt(save, savet);
+            var r: ptr = coerceInt(vreg, vtype);
+            var rr: ptr = newtmp();
+            if k == TK_EQEQ || k == TK_TRIPLEEQ { fprintf(tout, "  %s = icmp eq i64 %s, %s\n", rr, l, r); } else { fprintf(tout, "  %s = icmp ne i64 %s, %s\n", rr, l, r); }
+            setVal(rr, 0, "bool", 0);
+        }
+        else { break; }
+    }
+}

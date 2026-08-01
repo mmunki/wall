@@ -1,0 +1,3 @@
+fn setVal(reg: ptr, addr: ptr, typ: ptr, fn_: ptr) void {
+    vreg = reg; vaddr = addr; vtype = typ; vfn = fn_;
+}

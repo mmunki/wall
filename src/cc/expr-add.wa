@@ -1,0 +1,20 @@
+fn additive() void {
+    multiplicative();
+    while 1 == 1 {
+        var k: int = cur();
+        if k == 43 || k == 45 {
+            adv();
+            var savea: ptr = vreg; var sa: ptr = vtype;
+            multiplicative();
+            var r: ptr = newtmp();
+            if isPtrType(sa) != 0 && isPtrType(vtype) == 0 {
+                if k == 43 { fprintf(tout, "  %s = getelementptr i8, i8* %s, i64 %s\n", r, savea, vreg); } else { fprintf(tout, "  %s = getelementptr i8, i8* %s, i64 -%s\n", r, savea, vreg); }
+                setVal(r, 0, sa, 0);
+            } else {
+                if k == 43 { fprintf(tout, "  %s = add i64 %s, %s\n", r, savea, vreg); } else { fprintf(tout, "  %s = sub i64 %s, %s\n", r, savea, vreg); }
+                setVal(r, 0, sa, 0);
+            }
+        }
+        else { break; }
+    }
+}

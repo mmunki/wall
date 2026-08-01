@@ -1,0 +1,88 @@
+// ============================================================================
+// WALL DRIVER MODULE: string.wa  -- growable string builder
+// ----------------------------------------------------------------------------
+// The Wall language has no string '+' operator, so building command lines,
+// paths, and diagnostic messages is done with an explicit builder.
+//
+// This module implements a single global, growable byte buffer:
+//
+//   * bbuf -- pointer to the backing allocation (capacity bytes)
+//   * blen -- current logical length (number of meaningful bytes)
+//   * bcap -- total allocated capacity
+//
+// The buffer is always NUL-terminated at offset [blen], so bbuf can be passed
+// directly to C-string functions (system, printf, fopen, ...) as a `str`.
+//
+// API summary:
+//   bInit()      reset the buffer to empty (reuses existing capacity)
+//   bReserve(n)  ensure at least n more bytes fit (grows geometrically)
+//   bCat(s)      append a NUL-terminated C string
+//   bCatN(s,n)   append n raw bytes (may contain embedded NULs)
+//   bCatI(v)     append a 64-bit integer, formatted in decimal
+//   bCatC(c)     append a single byte
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// NOTE: the buffer state globals (bbuf/blen/bcap) are defined in contract.wa.
+//
+// bInit: reset the logical length to zero, keeping any existing allocation.
+// Also writes a terminating NUL so the buffer is a valid empty C string.
+// ----------------------------------------------------------------------------
+fn bInit() void {
+    if bbuf == 0 { bcap = 16384; bbuf = (ptr)malloc(bcap); }
+    blen = 0;
+    setbyte(bbuf, 0);
+}
+
+// ----------------------------------------------------------------------------
+// bReserve: make sure at least `need` additional bytes can be appended before
+// the current end. Grows the backing allocation geometrically (doubling) to
+// keep amortised cost linear, then reallocates and updates the global pointer.
+// ----------------------------------------------------------------------------
+fn bReserve(need: int) void {
+    if blen + need + 1 > bcap {
+        while blen + need + 1 > bcap { bcap = bcap * 2; }
+        var nb: ptr = (ptr)realloc(bbuf, bcap);
+        bbuf = nb;
+    }
+}
+
+// ----------------------------------------------------------------------------
+// bCat: append a complete NUL-terminated string (via strlen + memcpy).
+// ----------------------------------------------------------------------------
+fn bCat(s: str) void {
+    var n: int = strlen(s);
+    bReserve(n);
+    memcpy(bbuf + blen, s, n);
+    blen = blen + n;
+    setbyte(bbuf + blen, 0);
+}
+
+// ----------------------------------------------------------------------------
+// bCatN: append exactly n bytes from a pointer (no NUL required in source).
+// ----------------------------------------------------------------------------
+fn bCatN(s: ptr, n: int) void {
+    bReserve(n);
+    memcpy(bbuf + blen, s, n);
+    blen = blen + n;
+    setbyte(bbuf + blen, 0);
+}
+
+// ----------------------------------------------------------------------------
+// bCatI: append a signed 64-bit integer in decimal form (via snprintf).
+// ----------------------------------------------------------------------------
+fn bCatI(v: int) void {
+    var tmp: ptr = (ptr)malloc(64);
+    snprintf(tmp, 64, "%lld", v);
+    bCat(tmp);
+    free(tmp);
+}
+
+// ----------------------------------------------------------------------------
+// bCatC: append a single raw byte.
+// ----------------------------------------------------------------------------
+fn bCatC(c: int) void {
+    bReserve(1);
+    setbyte(bbuf + blen, c);
+    blen = blen + 1;
+    setbyte(bbuf + blen, 0);

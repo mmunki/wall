@@ -1,0 +1,6 @@
+fn sbAppendChar(sb: ptr, c: int) void {
+    sbReserve(sb, 1);
+    var d: ptr = sbData(sb);
+    setbyte(d + sb[8], c);
+    sb[8] = sb[8] + 1;
+}

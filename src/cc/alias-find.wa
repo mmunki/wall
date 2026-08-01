@@ -1,0 +1,8 @@
+fn findAlias(name: ptr) ptr {
+    var a: ptr = aliases;
+    while a != 0 {
+        if strEq((ptr)a[AL_NAME], name) != 0 { return a; }
+        a = (ptr)a[AL_NEXT];
+    }
+    return 0;
+}

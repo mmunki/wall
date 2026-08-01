@@ -1,0 +1,7 @@
+fn coercePtr(reg: ptr, typ: ptr) ptr {
+    if typ != 0 && (isPtrType(typ) != 0 || isStructType(typ) != 0) { return reg; }
+    var p: ptr = newtmp();
+    fprintf(tout, "  %s = inttoptr i64 %s to i8*\n", p, reg);
+    return p;
+}
+

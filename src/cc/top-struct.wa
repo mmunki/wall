@@ -1,0 +1,14 @@
+fn parseStruct() void {
+    adv();
+    var name: ptr = curText(); expect(TK_IDENT, "struct name");
+    var st: ptr = addStruct(name);
+    expect(123, "'{'");
+    while cur() != 125 {
+        var fname: ptr = curText(); expect(TK_IDENT, "field name");
+        expect(58, "':'");
+        var ftyp: ptr = curText(); adv();
+        addField(st, fname, ftyp);
+        if cur() == 44 { adv(); }
+    }
+    expect(125, "'}'");
+}

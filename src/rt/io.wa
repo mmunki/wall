@@ -1,0 +1,66 @@
+// ============================================================================
+// WALL STANDARD LIBRARY: lib/io.wa  -- input/output helpers
+// ----------------------------------------------------------------------------
+// Simple output helpers built on printf, and a few file utilities.
+//
+//     import "lib/io.wa";
+// ============================================================================
+
+// ---------------- libc -------------------------------------------------------
+extern fn printf(fmt: str, ...) int;
+extern fn fopen(path: str, mode: str) ptr;
+extern fn fclose(f: ptr) int;
+extern fn fread(buf: ptr, size: int, count: int, f: ptr) int;
+extern fn fwrite(buf: ptr, size: int, count: int, f: ptr) int;
+extern fn exit(code: int) void;
+
+// ---------------- plain prints -----------------------------------------------
+fn print(s: str) void {
+    printf("%s", s);
+}
+fn println(s: str) void {
+    printf("%s\n", s);
+}
+fn printInt(v: int) void {
+    printf("%lld\n", v);
+}
+fn printStrInt(label: str, v: int) void {
+    printf("%s %lld\n", label, v);
+}
+fn newline() void {
+    printf("\n");
+}
+
+// ---------------- formatted helpers ------------------------------------------
+fn sayInt(v: int) void {
+    printf("int: %lld\n", v);
+}
+fn sayStr(s: str) void {
+    printf("str: %s\n", s);
+}
+fn sayBool(b: int) void {
+    if b != 0 { printf("bool: true\n"); }
+    else { printf("bool: false\n"); }
+}
+
+// ---------------- file utilities ---------------------------------------------
+fn fileSize(path: str) int {
+    var f: ptr = fopen(path, "rb");
+    if f == 0 { return -1; }
+    var buf: ptr = (ptr)malloc(4096);
+    var total: int = 0;
+    while 1 == 1 {
+        var n: int = fread(buf, 1, 4096, f);
+        if n <= 0 { break; }
+        total = total + n;
+    }
+    fclose(f);
+    free(buf);
+    return total;
+}
+fn fileExists(path: str) int {
+    var f: ptr = fopen(path, "rb");
+    if f == 0 { return 0; }
+    fclose(f);
+    return 1;
+}

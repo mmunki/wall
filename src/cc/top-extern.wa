@@ -1,0 +1,24 @@
+fn parseExtern() void {
+    adv(); expect(K_FN, "'fn'");
+    var name: ptr = curText(); expect(TK_IDENT, "function name");
+    expect(40, "'('");
+    var f: ptr = addFunc(name, "void", 0, 0);
+    while cur() != 41 {
+        if cur() == TK_ELLIPSIS { f[FUN_VAR] = 1; adv(); break; }
+        expect(TK_IDENT, "param name");
+        expect(58, "':'");
+        var pt: ptr = curText(); adv();
+        addParamType(f, pt);
+        if cur() == TK_ELLIPSIS { f[FUN_VAR] = 1; adv(); break; }
+        if cur() == 44 { adv(); }
+    }
+    expect(41, "')'");
+    var ret: ptr = curText(); adv();
+    f[FUN_RET] = (int)ret;
+    expect(59, "';'");
+    // declare is emitted at end only if this extern is never defined in-module
+    var g: ptr = allocNode(48);
+    g[SYM_NAME] = (int)name; g[SYM_LL] = (int)name; g[SYM_TYP] = (int)ret;
+    g[SYM_ISFUNC] = 1; g[SYM_NEXT] = (int)syms;
+    syms = g;
+}

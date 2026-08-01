@@ -1,0 +1,52 @@
+fn unary() void {
+    var k: int = cur();
+    if k == 40 && isType(tokText(tpos + 1)) != 0 {
+        adv(); var ty: ptr = curText(); adv(); expect(41, "')'");
+        unary();
+        var dst: ptr = lltyp(ty);
+        var csrc: ptr = lltyp(vtype);
+        var r: ptr = newtmp();
+        var sp: int = 0; if strEq(csrc, "i8*") != 0 { sp = 1; }
+        var dp: int = 0; if strEq(dst, "i8*") != 0 { dp = 1; }
+        var sf: int = 0; if strEq(csrc, "double") != 0 { sf = 1; }
+        var df: int = 0; if strEq(dst, "double") != 0 { df = 1; }
+        var si: int = 0; if strEq(csrc, "i64") != 0 || strEq(csrc, "i1") != 0 { si = 1; }
+        var di: int = 0; if strEq(dst, "i64") != 0 || strEq(dst, "i1") != 0 { di = 1; }
+        if sp == 1 && dp == 1 { fprintf(tout, "  %s = bitcast i8* %s to i8*\n", r, vreg); }
+        elif sp == 1 && di == 1 { fprintf(tout, "  %s = ptrtoint i8* %s to %s\n", r, vreg, dst); }
+        elif dp == 1 && si == 1 { fprintf(tout, "  %s = inttoptr %s %s to i8*\n", r, csrc, vreg); }
+        elif sp == 1 && df == 1 { fprintf(tout, "  %s = ptrtoint i8* %s to i64\n", r, vreg); }
+        elif sf == 1 && dp == 1 { fprintf(tout, "  %s = inttoptr i64 0 to i8*\n", r); }
+        elif sf == 1 && di == 1 { fprintf(tout, "  %s = fptosi double %s to %s\n", r, vreg, dst); }
+        elif si == 1 && df == 1 { fprintf(tout, "  %s = sitofp %s %s to double\n", r, csrc, vreg); }
+        elif strEq(csrc, "i1") == 1 && strEq(dst, "i64") == 1 { fprintf(tout, "  %s = zext i1 %s to i64\n", r, vreg); }
+        elif strEq(csrc, "i64") == 1 && strEq(dst, "i1") == 1 { fprintf(tout, "  %s = icmp ne i64 %s, 0\n", r, vreg); }
+        elif sf == 1 && df == 1 { fprintf(tout, "  %s = bitcast double %s to double\n", r, vreg); }
+        else { fprintf(tout, "  %s = bitcast %s %s to %s\n", r, csrc, vreg, dst); }
+        setVal(r, 0, ty, 0);
+        return;
+    }
+    if k == 45 { adv(); unary(); var r: ptr = newtmp(); fprintf(tout, "  %s = sub i64 0, %s\n", r, vreg); setVal(r, 0, vtype, 0); return; }
+    if k == 33 { adv(); unary(); var r: ptr = newtmp(); fprintf(tout, "  %s = icmp eq i64 0, %s\n", r, vreg); setVal(r, 0, "bool", 0); return; }
+    if k == 126 { adv(); unary(); var r: ptr = newtmp(); fprintf(tout, "  %s = xor i64 %s, -1\n", r, vreg); setVal(r, 0, vtype, 0); return; }
+    if k == 42 { adv(); unary(); var r: ptr = newtmp(); fprintf(tout, "  %s = load i64, i64* %s\n", r, vreg); setVal(r, 0, "int", 0); return; }
+    if k == 38 { adv(); unary(); if vaddr == 0 { die("cannot take address of rvalue"); } var r: ptr = newtmp(); fprintf(tout, "  %s = bitcast i8* %s to i8*\n", r, vaddr); setVal(r, 0, "ptr", 0); return; }
+    if k == K_SIZEOF {
+        // sizeof(type)  or  sizeof(expr)  -- yields size in bytes as an int
+        adv(); expect(40, "'('");
+        var ty: ptr = 0;
+        if isType(tokText(tpos)) != 0 { ty = curText(); adv(); }
+        else {
+            // sizeof(expr): parse the expression, ignore its value
+            assign();
+            ty = vtype;
+        }
+        expect(41, "')'");
+        var r: ptr = newtmp();
+        var sz: int = szof(ty);
+        fprintf(tout, "  %s = sext i32 %lld to i64\n", r, sz);
+        setVal(r, 0, "int", 0);
+        return;
+    }
+    postfix();
+}

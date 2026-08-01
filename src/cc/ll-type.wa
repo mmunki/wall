@@ -1,0 +1,11 @@
+fn lltyp(t: ptr) ptr {
+    t = resolveType(t);
+    if strEq(t, "int") { return "i64"; }
+    if strEq(t, "float") { return "double"; }
+    if strEq(t, "bool") { return "i1"; }
+    if strEq(t, "str") { return "i8*"; }
+    if strEq(t, "void") { return "void"; }
+    if strEq(t, "ptr") { return "i8*"; }
+    if strEq(t, "char") || strEq(t, "byte") || strEq(t, "u8") { return "i8"; }
+    return "i8*";
+}

@@ -1,0 +1,118 @@
+// ============================================================================
+// WALL DRIVER MODULE: preproc.wa  -- import preprocessor
+// ----------------------------------------------------------------------------
+// The compiler engine itself compiles a single translation unit. To support
+// multi-file projects, the driver preprocesses the primary source before
+// compiling it: any line of the form
+//
+//     import "path/to/file.wa";
+//
+// is replaced by the verbatim contents of the referenced file. This gives Wall
+// a lightweight module system without complicating the compiler core.
+//
+// Resolution order for an import path:
+//   1. As given (absolute, or relative to the current working directory).
+//   2. Relative to the directory of the importing source file.
+// ============================================================================
+
+// ----------------------------------------------------------------------------
+// preprocess: read `src` (a global set by the driver) and write the fully
+// inlined result to `merged`. Returns 0 on success, non-zero on failure.
+// ----------------------------------------------------------------------------
+fn preprocess(merged: str) int {
+    var f: ptr = fopen(src, "rb");
+    if f == 0 { eerr("cannot open source"); return 1; }
+    var out: ptr = fopen(merged, "w");
+    if out == 0 { eerr("cannot write merged"); return 1; }
+
+    var line: ptr = (ptr)malloc(4096);
+    var llen: int = 0;
+    var eof: int = 0;
+    while eof == 0 {
+        // read one physical line
+        llen = 0;
+        var done: int = 0;
+        while done == 0 {
+            var got: int = fread(line + llen, 1, 1, f);
+            if got != 1 { eof = 1; break; }
+            if getbyte(line + llen) == 10 { done = 1; }
+            llen = llen + 1;
+        }
+        if llen == 0 { break; }
+        setbyte(line + llen, 0);
+
+        // detect `import "X";` (starts with the ASCII bytes i,m,p,o,r,t,space)
+        if llen > 7 && getbyte(line) == 105 && getbyte(line + 1) == 109
+            && getbyte(line + 2) == 112 && getbyte(line + 3) == 111
+            && getbyte(line + 4) == 114 && getbyte(line + 5) == 116
+            && getbyte(line + 6) == 32 {
+            // extract the quoted path
+            var j: int = 7;
+            while j < llen && getbyte(line + j) != 34 { j = j + 1; }
+            j = j + 1;
+            var imp: ptr = (ptr)malloc(1024);
+            var k: int = 0;
+            while j < llen && getbyte(line + j) != 34 { setbyte(imp + k, getbyte(line + j)); j = j + 1; k = k + 1; }
+            setbyte(imp + k, 0);
+
+            // resolve: first try as-is, then relative to the source's dir
+            var ifp: ptr = (ptr)malloc(2048);
+            bInit(); bCat(imp); memcpy(ifp, bbuf, blen + 1);
+            if d_fileExists(imp) == 0 {
+                var si: int = strlen(src) - 1;
+                while si >= 0 && getbyte(src + si) != 47 { si = si - 1; }
+                bInit();
+                if si >= 0 { bCatN(src, si + 1); }
+                bCat(imp);
+                memcpy(ifp, bbuf, blen + 1);
+            }
+
+            // inline the imported file verbatim.
+            // First try the filesystem; if absent, serve it from the stdlib
+            // embedded inside libwall.so (base64-decoded at runtime).
+            var embedded: ptr = 0;
+            var impf: ptr = fopen(ifp, "rb");
+            if impf == 0 {
+                libbasename(imp);
+                embedded = liblookup(bbuf);
+                if embedded != 0 {
+                    bInit(); bCat("using embedded stdlib module \""); bCat(imp); bCat("\"");
+                    enote(bbuf);
+                    var es: ptr = embedded;
+                    while getbyte(es) != 0 {
+                        fwrite(es, 1, 1, out);
+                        es = es + 1;
+                    }
+                } else {
+                    eerr("cannot open import");
+                    return 1;
+                }
+            }
+            if impf != 0 {
+                var rbuf: ptr = (ptr)malloc(4096);
+                while 1 == 1 {
+                    var n: int = fread(rbuf, 1, 4096, impf);
+                    if n <= 0 { break; }
+                    fwrite(rbuf, 1, n, out);
+                }
+                fclose(impf);
+            }
+            fwrite("\n", 1, 1, out);
+        } else {
+            // ordinary line: copy through verbatim
+            fwrite(line, 1, llen, out);
+            fwrite("\n", 1, 1, out);
+        }
+    }
+    fclose(f);
+    fclose(out);
+    return 0;
+}
+
+// ----------------------------------------------------------------------------
+// arg_at: index into a char** argv array and return argv[i] as a `str`.
+// ----------------------------------------------------------------------------
+fn arg_at(argv: ptr, i: int) str {
+    var p: ptr = (ptr)argv[i * 8];
+    return (str)p;
+}

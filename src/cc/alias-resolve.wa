@@ -1,0 +1,12 @@
+// resolveType: follow typedef aliases to the underlying base type name.
+fn resolveType(t: ptr) ptr {
+    var seen: int = 0;
+    while seen < 32 {
+        if t == 0 { return "ptr"; }
+        var a: ptr = findAlias(t);
+        if a == 0 { return t; }
+        t = (ptr)a[AL_TARGET];
+        seen = seen + 1;
+    }
+    return t;
+}

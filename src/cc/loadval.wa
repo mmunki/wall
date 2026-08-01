@@ -1,0 +1,2 @@
+fn loadval() void { /* no-op: value is in vreg */ }
+

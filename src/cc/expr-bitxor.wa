@@ -1,0 +1,4 @@
+fn bitXor() void {
+    bitAnd();
+    while 1 == 1 { if cur() == 94 { adv(); var save: ptr = vreg; var sa: ptr = vtype; bitAnd(); var r: ptr = newtmp(); fprintf(tout, "  %s = xor i64 %s, %s\n", r, save, vreg); setVal(r, 0, sa, 0); } else { break; } }
+}

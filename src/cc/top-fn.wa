@@ -1,0 +1,68 @@
+fn parseFn() void {
+     adv();
+     var name: ptr = curText(); expect(TK_IDENT, "function name");
+    expect(40, "'('");
+    var f: ptr = addFunc(name, "void", 0, 0);
+    var pnames: ptr = (ptr)malloc(16 * 8);
+    var np: int = 0;
+    while cur() != 41 {
+        if cur() == TK_ELLIPSIS { adv(); break; }
+        var pn: ptr = curText(); expect(TK_IDENT, "param name");
+        expect(58, "':'");
+        var pt: ptr = curText(); adv();
+        addParamType(f, pt);
+        pnames[np * 8] = (int)pn;
+        np = np + 1;
+        if cur() == 44 { adv(); }
+    }
+    expect(41, "')'");
+    var ret: ptr = curText(); adv();
+    f[FUN_RET] = (int)ret;
+    var g: ptr = allocNode(48);
+    g[SYM_NAME] = (int)name; g[SYM_LL] = (int)name; g[SYM_TYP] = (int)ret;
+    g[SYM_ISFUNC] = 1; g[SYM_NEXT] = (int)syms;
+    syms = g;
+    // mark defined so no duplicate declare is emitted
+    var df: ptr = funcs;
+    while df != 0 {
+        if strEq((ptr)df[FUN_NAME], name) != 0 { df[FUN_DEF] = 1; }
+        df = (ptr)df[FUN_NEXT];
+    }
+    expect(123, "'{'");
+    fprintf(tout, "define %s @%s(", lltyp(ret), name);
+    var i: int = 0;
+    var pts: ptr = (ptr)f[FUN_PTS];
+    if strEq(name, "main") != 0 {
+        fprintf(tout, "i32 %%arge0, i8** %%argv0");
+    } else {
+        while i < f[FUN_NP] {
+            if i > 0 { fprintf(tout, ", "); }
+            fprintf(tout, "%s %%%s", lltyp((ptr)pts[i * 8]), (ptr)pnames[i * 8]);
+            i = i + 1;
+        }
+    }
+    fprintf(tout, ") {\n");
+    locals = 0;
+    if strEq(name, "main") != 0 {
+        fprintf(tout, "  %%ar = sext i32 %%arge0 to i64\n");
+        fprintf(tout, "  store i64 %%ar, i64* @w_argc\n");
+        fprintf(tout, "  store i8** %%argv0, i8*** @w_argv\n");
+    }
+    i = 0;
+    while i < f[FUN_NP] {
+        var an: ptr = newtmp();
+        var ptl: ptr = lltyp((ptr)pts[i * 8]);
+        fprintf(tout, "  %s = alloca %s\n", an, ptl);
+        fprintf(tout, "  store %s %%%s, %s* %s\n", ptl, (ptr)pnames[i * 8], ptl, an);
+        addloc((ptr)pnames[i * 8], an, (ptr)pts[i * 8], 1);
+        i = i + 1;
+    }
+    var prevret: ptr = curret;
+    curret = ret;
+    while cur() != 125 { stmt(); }
+    expect(125, "'}'");
+    if strEq(lltyp(ret), "void") != 0 { fprintf(tout, "  ret void\n"); } elif strEq(lltyp(ret), "i8*") != 0 { fprintf(tout, "  ret i8* null\n"); } else { fprintf(tout, "  ret %s 0\n", lltyp(ret)); }
+    fprintf(tout, "}\n");
+    locals = 0;
+    curret = prevret;
+}

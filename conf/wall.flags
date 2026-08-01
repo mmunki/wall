@@ -1,0 +1,75 @@
+# ============================================================================
+# WALL USER-EXTENSIBLE FLAGS  (conf/wall.flags)
+# ----------------------------------------------------------------------------
+# Add custom command-line flags to the `wall` tool without touching source.
+# Format per line (blank lines and lines starting with '#' are ignored):
+#
+#   FLAG  ROLE  "human description"
+#
+# FLAG may contain a '*' wildcard for prefix matching (everything up to '*'
+# is compared against the argument).
+#
+# ROLE is one of the names below; it selects the behavior the flag triggers.
+# Unknown roles are ignored (treated as R_NONE), so the tool stays robust.
+#
+#   help          print help and exit
+#   version       print version and exit
+#   verbose       enable verbose command echo (-v)
+#   optlevel0..3  set the optimization level
+#   optsize       optimize for size (-Os)
+#   optz          optimize for minimum size (-Oz)
+#   emitobj       compile to object only (-c)
+#   emitasm       emit assembly only (-S)
+#   emitir        emit LLVM IR only (-emit-llvm)
+#   shared        build a shared library
+#   pic           emit position-independent code
+#   nopie / pie   control PIE generation
+#   nolink        do not link crt/libc (-nostdlib)
+#   nowarn        suppress warnings (-w)
+#   werror        treat warnings as errors (-Werror)
+#   warnall       enable all warnings (-Wall)
+#   color / nocolor   force / disable colored diagnostics
+#   debug         generate debug info (-g)
+#   out:next      the NEXT argument is the output file (like -o)
+#   san           enable a sanitizer (-fsanitize=<name>)
+# ============================================================================
+
+# ---- performance presets -----------------------------------------------------
+-O4             optlevel3   "maximum optimization (alias for -O3)"
+-O5             optlevel3   "alias for -O3"
+-Og             optlevel1   "optimize for debugging experience"
+-fast           optlevel3   "fast and furious optimization"
+-speculative    optlevel3   "aggressive speculative optimization"
+
+# ---- size presets ------------------------------------------------------------
+-tiny           optz        "maximize code-size reduction"
+-size           optsize     "optimize for code size"
+-shrink         optsize     "alias for -Os"
+
+# ---- build flavors -----------------------------------------------------------
+-lib            shared      "build a shared library (alias for -shared)"
+-dylib          shared      "build a shared library (alias for -shared)"
+-package        shared      "build a relocatable package (.so)"
+-module         shared      "build a shared module"
+-position-independent  pic  "emit position-independent code (alias)"
+-nopie          nopie       "do not build a position-independent executable"
+-nostdlib       nolink      "do not link the standard libraries"
+
+# ---- diagnostic toggles ------------------------------------------------------
+-quiet          nowarn      "suppress all diagnostics"
+-terse          nowarn      "terse output (no warnings)"
+-strict         werror      "strict: warnings are fatal"
+-pedantic       warnall     "be pedantic about diagnostics"
+-ansi           nocolor     "no ANSI color escapes"
+
+# ---- info / introspection ----------------------------------------------------
+-whatsup        version     "print version banner"
+-about          help        "show the help screen"
+-doc            help        "show the help screen"
+-usage          help        "show the help screen"
+
+# ---- convenience aliases (wildcard examples) ---------------------------------
+-verify*        emitir      "verify: emit IR and stop"
+-showir         emitir      "show LLVM IR and stop"
+-asm*           emitasm     "emit assembly and stop"
+-obj*           emitobj     "emit an object and stop"

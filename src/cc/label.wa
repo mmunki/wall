@@ -1,0 +1,9 @@
+fn newlabel(pfx: ptr) ptr {
+    var sb: ptr = sbNew();
+    sbAppendCStr(sb, pfx);
+    sbAppendI64(sb, labeln);
+    labeln = labeln + 1;
+    sbAppendChar(sb, 0);
+    var s: ptr = sbData(sb);
+    return s;
+}

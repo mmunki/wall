@@ -1,0 +1,46 @@
+fn wall_compile(infile: str, outfile: str) int {
+    var file: ptr = readFile(infile);
+    if file == 0 { printf("wall: cannot open %s\n", infile); return 1; }
+    csrc = sbData(file);
+    srclen = sbLen(file);
+    toks = sbNew();
+    strdefs = 0;
+    nstr = 0;
+    sid = 0;
+    tmpn = 0;
+    labeln = 0;
+    loopdepth = 0;
+    syms = 0;
+    funcs = 0;
+    structs = 0;
+    aliases = 0;
+    lex();
+    tout = fopen(outfile, "w");
+    if tout == 0 { printf("wall: cannot write %s\n", outfile); return 1; }
+    fprintf(tout, "; ModuleID = 'wall'\n");
+    fprintf(tout, "target triple = \"aarch64-linux-android\"\n\n");
+    fprintf(tout, "@w_argc = global i64 0\n@w_argv = global i8** null\n\n");
+    while cur() != TK_EOF { top(); }
+    var df: ptr = funcs;
+    while df != 0 {
+        if df[FUN_DEF] == 0 {
+            fprintf(tout, "declare %s @%s(", lltyp((ptr)df[FUN_RET]), (ptr)df[FUN_NAME]);
+            var pi: int = 0;
+            var ppts: ptr = (ptr)df[FUN_PTS];
+            while pi < df[FUN_NP] {
+                if pi > 0 { fprintf(tout, ", "); }
+                fprintf(tout, "%s", lltyp((ptr)ppts[pi * 8]));
+                pi = pi + 1;
+            }
+            if df[FUN_VAR] == 1 { if df[FUN_NP] > 0 { fprintf(tout, ", "); } fprintf(tout, "..."); }
+            fprintf(tout, ")\n");
+        }
+        df = (ptr)df[FUN_NEXT];
+    }
+    var j: int = 0;
+    var sd: ptr = strdefs;
+    while j < nstr { fprintf(tout, "%s", (ptr)sd[j * 8]); j = j + 1; }
+    fclose(tout);
+    return 0;
+}
+

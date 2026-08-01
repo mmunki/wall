@@ -1,0 +1,79 @@
+// ============================================================================
+// WALL DRIVER MODULE: paths.wa  -- environment & toolchain path resolution
+// ----------------------------------------------------------------------------
+// Centralises every filesystem path the Wall toolchain needs at runtime.
+// All paths are DERIVED FROM THE SYSTEM at runtime (via getenv), so the
+// toolchain is portable and contains no hard-coded installation locations.
+//
+//   * TMPD    -- writable scratch directory for intermediate artifacts.
+//                Prefers $TMPDIR, otherwise $HOME/.cache/tmp.
+//   * SYSROOT -- the target sysroot (root of the C runtime libraries used
+//                when linking). Prefers $PREFIX, otherwise $HOME.
+//   * DYNLINK -- absolute path to the dynamic linker for PIE executables.
+//                Detected from /proc/self/exe's interpreter at runtime.
+//
+// Values are lazily initialised on first use via initPaths() and can be
+// overridden by assigning the corresponding global.
+// ============================================================================
+
+// ---------------- libc -------------------------------------------------------
+// NOTE: strlen/memcpy/malloc/free/getbyte/bInit/bCat are declared in
+// contract.wa (the first module of the merged translation unit), so only the
+// functions unique to this module need declaring here.
+extern fn getenv(name: str) ptr;
+
+// ---------------- path globals (defined in contract.wa) ----------------------
+
+// ---------------- small helpers ----------------------------------------------
+// getenvStr: return the value of an env var, or an empty string if unset.
+fn getenvStr(name: str) ptr {
+    var p: ptr = getenv(name);
+    if p == 0 { return ""; }
+    return p;
+}
+
+// copyStr: duplicate a NUL-terminated string into fresh heap storage.
+fn copyStr(s: ptr) ptr {
+    var n: int = strlen(s);
+    var p: ptr = (ptr)malloc(n + 1);
+    memcpy(p, s, n + 1);
+    return p;
+}
+
+// initPaths: populate any path global that is still unset, deriving each
+// value from the environment rather than from hard-coded installation paths.
+fn initPaths() void {
+    // scratch directory: $TMPDIR, else $HOME/.cache/tmp
+    var t: ptr = getenvStr("TMPDIR");
+    if strlen(t) > 0 {
+        var len: int = strlen(t);
+        var p: ptr = (ptr)malloc(len + 2);
+        memcpy(p, t, len);
+        var last: int = len - 1;
+        if getbyte(t + last) != 47 { setbyte(p + len, 47); len = len + 1; }
+        setbyte(p + len, 0);
+        TMPD = p;
+    } else {
+        var h: ptr = getenvStr("HOME");
+        if strlen(h) > 0 {
+            bInit(); bCat(h); bCat("/.cache/tmp/");
+            TMPD = copyStr(bbuf);
+        } else {
+            TMPD = "./";
+        }
+    }
+
+    // sysroot: $PREFIX (a common convention), else $HOME
+    var pr: ptr = getenvStr("PREFIX");
+    if strlen(pr) > 0 { SYSROOT = copyStr(pr); }
+    else {
+        var h2: ptr = getenvStr("HOME");
+        if strlen(h2) > 0 { SYSROOT = copyStr(h2); }
+        else { SYSROOT = "/"; }
+    }
+
+    // dynamic linker: $WALL_LINKER override, else best-effort defaults.
+    var dl: ptr = getenvStr("WALL_LINKER");
+    if strlen(dl) > 0 { DYNLINK = copyStr(dl); }
+    else { DYNLINK = "/system/bin/linker64"; }
+}

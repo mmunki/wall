@@ -1,0 +1,43 @@
+// ============================================================================
+// WALL LAUNCHER  (src/wall-launcher.wa)
+// ----------------------------------------------------------------------------
+// The `wall` command-line entry point, kept deliberately tiny.
+//
+// This binary contains almost no logic of its own: it simply
+//   1. reads the process argc/argv (via the compiler's auto-generated
+//      `main(i32, i8**)` and its `arge`/`argp` accessors),
+//   2. materialises a proper `char**` argument vector on the heap,
+//   3. and hands full control to `wall_driver()` exported by libwall.so.
+//
+// All real behavior -- option parsing, the compile pipeline, help text, and
+// colored diagnostics -- lives inside the shared library. After stripping this
+// file stays well under 5 KB, satisfying the "tiny launcher" design goal.
+// ============================================================================
+
+// ---------------- libc / compiler accessors -----------------------------------
+extern fn arge() int;              // number of command-line arguments
+extern fn argp(i: int) str;        // i-th argument as a string
+extern fn malloc(size: int) ptr;
+extern fn memcpy(dst: ptr, src: ptr, n: int) ptr;
+extern fn free(p: ptr) void;
+
+// ---------------- driver entry (exported from libwall.so) ----------------------
+extern fn wall_driver(argc: int, argv: ptr) int;
+
+// ============================================================================
+// main: forward the process arguments to the library driver and return its
+// exit status, so the shell sees the correct exit code.
+// ============================================================================
+fn main() int {
+    var n: int = arge();
+    // Build a contiguous char** array so the driver can index argv[i] via
+    // 8-byte pointer slots (char* pointers), exactly like a C main().
+    var argv: ptr = (ptr)malloc((n + 1) * 8);
+    var i: int = 0;
+    while i < n {
+        argv[i * 8] = (int)argp(i);
+        i = i + 1;
+    }
+    argv[n * 8] = 0;          // NULL-terminate argv for safety
+    return wall_driver(n, argv);
+}

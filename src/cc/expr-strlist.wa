@@ -1,0 +1,7 @@
+fn sbAppendToStrlist(list: ptr, s: ptr) ptr {
+    // simple growable array of char* (each 8 bytes)
+    var idx: int = nstr;
+    list = (ptr)realloc(list, (idx + 1) * 8);
+    list[idx * 8] = (int)s;
+    return list;
+}

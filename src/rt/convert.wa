@@ -1,0 +1,104 @@
+// ============================================================================
+// WALL STANDARD LIBRARY: lib/convert.wa  -- number <-> string conversion
+// ----------------------------------------------------------------------------
+// Converts between 64-bit integers and their decimal string representations,
+// and related small parsing/formatting helpers. All returned strings are
+// freshly allocated with malloc.
+//
+//     import "lib/convert.wa";
+// ============================================================================
+
+// ---------------- libc -------------------------------------------------------
+extern fn malloc(size: int) ptr;
+extern fn free(p: ptr) void;
+extern fn strlen(s: str) int;
+extern fn memcpy(dst: ptr, src: ptr, n: int) ptr;
+extern fn getbyte(p: ptr) int;
+extern fn setbyte(p: ptr, v: int) void;
+extern fn snprintf(buf: ptr, n: int, fmt: str, ...) int;
+
+// ---------------- int -> decimal string (allocates) ---------------------------
+fn itoa(v: int) str {
+    // 24 bytes is enough for any i64 in decimal (max 19 digits + sign + NUL).
+    var buf: ptr = (ptr)malloc(24);
+    var n: int = snprintf(buf, 24, "%lld", v);
+    var p: ptr = (ptr)malloc(n + 1);
+    memcpy(p, buf, n + 1);
+    free(buf);
+    return (str)p;
+}
+
+// ---------------- string -> int ----------------------------------------------
+fn atoi(s: str) int {
+    var n: int = strlen(s);
+    var i: int = 0;
+    var neg: int = 0;
+    if i < n && getbyte(s + i) == 45 { neg = 1; i = i + 1; }
+    var val: int = 0;
+    while i < n {
+        var c: int = getbyte(s + i);
+        if c < 48 || c > 57 { break; }
+        val = val * 10 + (c - 48);
+        i = i + 1;
+    }
+    if neg == 1 { val = 0 - val; }
+    return val;
+}
+fn parseUnsigned(s: str) int {
+    var n: int = strlen(s);
+    var val: int = 0;
+    var i: int = 0;
+    while i < n {
+        var c: int = getbyte(s + i);
+        if c < 48 || c > 57 { break; }
+        val = val * 10 + (c - 48);
+        i = i + 1;
+    }
+    return val;
+}
+
+// ---------------- int -> hex string (allocates) -------------------------------
+fn itohex(v: int) str {
+    // 2 chars per byte, plus prefix; 20 bytes covers any i64.
+    var buf: ptr = (ptr)malloc(24);
+    var n: int = snprintf(buf, 24, "0x%llx", v);
+    var p: ptr = (ptr)malloc(n + 1);
+    memcpy(p, buf, n + 1);
+    free(buf);
+    return (str)p;
+}
+fn itobin(v: int) str {
+    // build binary string (up to 64 bits) MSB..LSB
+    var p: ptr = (ptr)malloc(66);
+    var i: int = 63;
+    var n: int = 0;
+    while i >= 0 {
+        var bit: int = 0;
+        var shift: int = 1;
+        var k: int = 0;
+        while k < i { shift = shift * 2; k = k + 1; }
+        if (v & shift) != 0 { bit = 1; }
+        setbyte(p + n, 48 + bit);
+        n = n + 1;
+        i = i - 1;
+    }
+    // strip leading zeros
+    var s: int = 0;
+    while s < n - 1 && getbyte(p + s) == 48 { s = s + 1; }
+    var olen: int = n - s;
+    var out: ptr = (ptr)malloc(olen + 1);
+    memcpy(out, p + s, olen);
+    setbyte(out + olen, 0);
+    free(p);
+    return (str)out;
+}
+
+// ---------------- float formatting -------------------------------------------
+fn ftos(v: float) str {
+    var buf: ptr = (ptr)malloc(64);
+    var n: int = snprintf(buf, 64, "%f", v);
+    var p: ptr = (ptr)malloc(n + 1);
+    memcpy(p, buf, n + 1);
+    free(buf);
+    return (str)p;
+}

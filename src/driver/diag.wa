@@ -1,0 +1,55 @@
+}
+fn ereset() str { if color == 1 { return "\033[0m"; } return ""; }
+fn ered()   str { if color == 1 { return "\033[1;31m"; } return ""; }
+fn eryel()  str { if color == 1 { return "\033[1;33m"; } return ""; }
+fn ecyan()  str { if color == 1 { return "\033[1;36m"; } return ""; }
+fn egrn()   str { if color == 1 { return "\033[32m"; } return ""; }
+fn ebold()  str { if color == 1 { return "\033[1m"; } return ""; }
+fn emag()   str { if color == 1 { return "\033[1;35m"; } return ""; }
+fn eblue()  str { if color == 1 { return "\033[1;34m"; } return ""; }
+fn edim()   str { if color == 1 { return "\033[2m"; } return ""; }
+
+// Professional log format: a single yellow tool label followed by a colored
+// severity marker and the message. Colors only apply when enabled; when the
+// output is not a terminal the escapes are omitted entirely.
+//   wall: e: error message     (marker red)
+//   wall: w: warning message   (marker purple)
+//   wall: n: note message      (marker cyan)
+//   wall: i: info message      (marker yellow, verbose-only)
+//   wall: ok: message          (marker green, verbose-only)
+
+fn eerr(msg: str) void {
+    printf("%swall:%s %se:%s %s\n", eryel(), ereset(), ered(), ereset(), msg);
+}
+
+fn ewarn(msg: str) void {
+    if nowarn == 1 { return; }
+    printf("%swall:%s %sw:%s %s\n", eryel(), ereset(), emag(), ereset(), msg);
+    if werror == 1 { exit(1); }
+}
+
+fn enote(msg: str) void {
+    printf("%swall:%s %sn:%s %s\n", eryel(), ereset(), ecyan(), ereset(), msg);
+}
+
+fn einfo(msg: str) void {
+    if verbose != 1 { return; }
+    printf("%swall:%s %si:%s %s\n", eryel(), ereset(), eryel(), ereset(), msg);
+}
+
+fn eok(msg: str) void {
+    if verbose != 1 { return; }
+    printf("%swall:%s %sok:%s %s\n", eryel(), ereset(), egrn(), ereset(), msg);
+}
+
+fn d_fileExists(path: str) int {
+    if access(path, 0) == 0 { return 1; }
+    return 0;
+}
+
+fn run() int {
+    if verbose == 1 {
+        printf("%swall:%s %srun:%s %s\n", eryel(), ereset(), emag(), ereset(), bbuf);
+    }
+    return system(bbuf);
+}

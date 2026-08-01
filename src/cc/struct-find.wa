@@ -1,0 +1,8 @@
+fn findStruct(name: ptr) ptr {
+    var s: ptr = structs;
+    while s != 0 {
+        if strEq((ptr)s[STR_NAME], name) { return s; }
+        s = (ptr)s[STR_NEXT];
+    }
+    return 0;
+}

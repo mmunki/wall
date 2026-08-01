@@ -1,0 +1,57 @@
+// ----------------------------------------------------------------------------
+// countFlags: walk the flag table and return how many options are registered.
+// The table is populated by initFlags() (plus any user config file), so this
+// runs after initialization to print an accurate total in --help.
+// ----------------------------------------------------------------------------
+fn countFlags() int {
+    var f: ptr = flags;
+    var n: int = 0;
+    while f != 0 { n = n + 1; f = (ptr)f[FL_NEXT]; }
+    return n;
+}
+
+// Number of operators / expressions the language frontend understands. This is
+// a constant that tracks the compiler grammar (arithmetic, shift, bitwise,
+// relational, equality, logical, assignment, unary, postfix and ternary).
+let N_EXPRESSIONS = 52;
+
+fn printHelp() void {
+    printf("WALL TOOLCHAIN\n");
+    printf("options (%lld registered):\n", countFlags());
+    printf("  --help -h                  print this help and exit\n");
+    printf("  --version                  print version information and exit\n");
+    printf("  run <file>                 compile and run\n");
+    printf("  build                      build executable (default)\n");
+    printf("  obj -c --emit-obj          compile to object(s) only\n");
+    printf("  -S                         emit assembly only\n");
+    printf("  -emit-llvm                 emit LLVM IR only\n");
+    printf("  -o <file>                  write output to <file>\n");
+    printf("  -O0 -O1 -O2 -O3 -Os -Oz    optimization level (default -O2)\n");
+    printf("  -g                         generate debug information\n");
+    printf("  -shared -static            build shared library / static link\n");
+    printf("  -fPIC -fpic                position-independent code\n");
+    printf("  -pie -no-pie               control PIE generation\n");
+    printf("  -nostdlib                  do not link crt/libc\n");
+    printf("  -l<lib> -L<dir>            link library / add search path\n");
+    printf("  -Wl,<flag>                 pass <flag> to the linker\n");
+    printf("  -I<dir> -D<name>           include dir / preprocessor define\n");
+    printf("  -pthread -fopenmp          enable threading / OpenMP\n");
+    printf("  -ffast-math -flto          fast-math / link-time optimization\n");
+    printf("  -w -Wall -Werror           warning controls\n");
+    printf("  -v --verbose               show commands as they run\n");
+    printf("  -fcolor -fno-color         force or disable colored diagnostics\n");
+    printf("  -fsanitize=<name>          enable a sanitizer\n");
+    printf("  -mllvm <arg>               pass <arg> to the LLVM backend\n");
+    printf("  -save-temps                keep intermediate files\n");
+    printf("  -fno-omit-frame-pointer    keep frame pointer\n");
+    printf("  conf/wall.flags            user-extensible flag definitions\n");
+    printf("language: %lld operators/expressions in the frontend grammar\n", N_EXPRESSIONS);
+}
+
+fn printVersion() void {
+    printf("WALL 0.1.0\n");
+    printf("  target: aarch64-linux-android\n");
+    printf("  engine: libwall.so (wall_compile)\n");
+    printf("  options: %lld registered\n", countFlags());
+    printf("  expressions: %lld operators/expressions\n", N_EXPRESSIONS);
+}

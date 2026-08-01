@@ -1,0 +1,153 @@
+// ============================================================================
+// WALL STANDARD LIBRARY: lib/array.wa  -- dynamic int array
+// ----------------------------------------------------------------------------
+// A minimal dynamic array of 64-bit integers implemented in pure Wall.
+//
+// Layout (a 32-byte struct accessed via pointer arithmetic):
+//   [0]  data pointer  (i64*)
+//   [8]  length        (i64)
+//   [16] capacity      (i64)
+//
+//     import "lib/array.wa";
+//
+// All functions take the array pointer; array_new() creates one. Free with
+// array_free(). Grows geometrically on push.
+// ============================================================================
+
+// ---------------- libc -------------------------------------------------------
+extern fn malloc(size: int) ptr;
+extern fn free(p: ptr) void;
+extern fn realloc(p: ptr, size: int) ptr;
+extern fn memcpy(dst: ptr, src: ptr, n: int) ptr;
+
+// ---------------- offsets -----------------------------------------------------
+let ARR_DATA = 0;
+let ARR_LEN = 8;
+let ARR_CAP = 16;
+
+fn array_new() ptr {
+    var a: ptr = (ptr)malloc(24);
+    a[ARR_DATA] = 0;
+    a[ARR_LEN] = 0;
+    a[ARR_CAP] = 0;
+    return a;
+}
+fn array_len(a: ptr) int {
+    return a[ARR_LEN];
+}
+fn array_cap(a: ptr) int {
+    return a[ARR_CAP];
+}
+fn array_empty(a: ptr) int {
+    return a[ARR_LEN] == 0 ? 1 : 0;
+}
+fn array_get(a: ptr, i: int) int {
+    if i < 0 || i >= a[ARR_LEN] { return 0; }
+    var d: ptr = (ptr)a[ARR_DATA];
+    return d[i * 8];
+}
+fn array_set(a: ptr, i: int, v: int) void {
+    if i < 0 || i >= a[ARR_LEN] { return; }
+    var d: ptr = (ptr)a[ARR_DATA];
+    d[i * 8] = v;
+}
+fn array_reserve(a: ptr, need: int) void {
+    if need > a[ARR_CAP] {
+        var nc: int = a[ARR_CAP];
+        if nc == 0 { nc = 8; }
+        while nc < need { nc = nc * 2; }
+        a[ARR_DATA] = (int)realloc((ptr)a[ARR_DATA], nc * 8);
+        a[ARR_CAP] = nc;
+    }
+}
+fn array_push(a: ptr, v: int) void {
+    array_reserve(a, a[ARR_LEN] + 1);
+    var d: ptr = (ptr)a[ARR_DATA];
+    d[a[ARR_LEN] * 8] = v;
+    a[ARR_LEN] = a[ARR_LEN] + 1;
+}
+fn array_pop(a: ptr) int {
+    if a[ARR_LEN] == 0 { return 0; }
+    a[ARR_LEN] = a[ARR_LEN] - 1;
+    return array_get(a, a[ARR_LEN]);
+}
+fn array_front(a: ptr) int {
+    return array_get(a, 0);
+}
+fn array_back(a: ptr) int {
+    return array_get(a, a[ARR_LEN] - 1);
+}
+fn array_clear(a: ptr) void {
+    a[ARR_LEN] = 0;
+}
+fn array_free(a: ptr) void {
+    if a[ARR_DATA] != 0 { free((ptr)a[ARR_DATA]); }
+    free(a);
+}
+fn array_contains(a: ptr, v: int) int {
+    var i: int = 0;
+    while i < a[ARR_LEN] {
+        if array_get(a, i) == v { return 1; }
+        i = i + 1;
+    }
+    return 0;
+}
+fn array_sum(a: ptr) int {
+    var s: int = 0;
+    var i: int = 0;
+    while i < a[ARR_LEN] {
+        s = s + array_get(a, i);
+        i = i + 1;
+    }
+    return s;
+}
+fn array_max(a: ptr) int {
+    if a[ARR_LEN] == 0 { return 0; }
+    var m: int = array_get(a, 0);
+    var i: int = 1;
+    while i < a[ARR_LEN] {
+        var v: int = array_get(a, i);
+        if v > m { m = v; }
+        i = i + 1;
+    }
+    return m;
+}
+fn array_min(a: ptr) int {
+    if a[ARR_LEN] == 0 { return 0; }
+    var m: int = array_get(a, 0);
+    var i: int = 1;
+    while i < a[ARR_LEN] {
+        var v: int = array_get(a, i);
+        if v < m { m = v; }
+        i = i + 1;
+    }
+    return m;
+}
+// simple in-place bubble sort
+fn array_sort(a: ptr) void {
+    var n: int = a[ARR_LEN];
+    var i: int = 0;
+    while i < n {
+        var j: int = 0;
+        while j < n - 1 - i {
+            if array_get(a, j) > array_get(a, j + 1) {
+                var t: int = array_get(a, j);
+                array_set(a, j, array_get(a, j + 1));
+                array_set(a, j + 1, t);
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
+fn array_reverse(a: ptr) void {
+    var i: int = 0;
+    var j: int = a[ARR_LEN] - 1;
+    while i < j {
+        var t: int = array_get(a, i);
+        array_set(a, i, array_get(a, j));
+        array_set(a, j, t);
+        i = i + 1;
+        j = j - 1;
+    }
+}

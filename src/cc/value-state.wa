@@ -1,0 +1,5 @@
+// expression value holders (globals set by expr parser)
+var vreg: ptr = 0;   // ssa register (string) or 0
+var vaddr: ptr = 0;  // address (string) or 0
+var vtype: ptr = 0;  // type name or 0
+var vfn: ptr = 0;    // function name or 0

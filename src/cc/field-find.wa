@@ -1,0 +1,8 @@
+fn findField(st: ptr, name: ptr) ptr {
+    var f: ptr = (ptr)st[STR_FIELDS];
+    while f != 0 {
+        if strEq((ptr)f[FLD_NAME], name) { return f; }
+        f = (ptr)f[FLD_NEXT];
+    }
+    return 0;
+}

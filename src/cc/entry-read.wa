@@ -1,0 +1,19 @@
+fn readFile(path: str) ptr {
+    var f: ptr = fopen(path, "rb");
+    if f == 0 { return 0; }
+    var sb: ptr = sbNew();
+    var buf: ptr = (ptr)malloc(4096);
+    while 1 == 1 {
+        var n: int = fread(buf, 1, 4096, f);
+        if n <= 0 { break; }
+        sbReserve(sb, n);
+        var d: ptr = sbData(sb);
+        memcpy(d + sbLen(sb), buf, n);
+        sb[8] = sbLen(sb) + n;
+    }
+    fclose(f);
+    return sb;
+}
+// Library entry: compile a single .wa file to LLVM IR text.
+// Returns 0 on success, 1 on failure. Reusable by the `wall` driver
+// and exported from libwall.so.

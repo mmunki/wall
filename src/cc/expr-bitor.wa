@@ -1,0 +1,4 @@
+fn bitOr() void {
+    bitXor();
+    while 1 == 1 { if cur() == 124 { adv(); var save: ptr = vreg; var sa: ptr = vtype; bitXor(); var r: ptr = newtmp(); fprintf(tout, "  %s = or i64 %s, %s\n", r, save, vreg); setVal(r, 0, sa, 0); } else { break; } }
+}

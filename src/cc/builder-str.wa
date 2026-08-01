@@ -1,0 +1,3 @@
+fn sbAppendStr(sb: ptr, s: ptr) void {
+    sbAppendCStr(sb, s);
+}

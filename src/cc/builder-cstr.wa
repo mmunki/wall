@@ -1,0 +1,7 @@
+fn sbAppendCStr(sb: ptr, s: ptr) void {
+    var n: int = strlen(s);
+    sbReserve(sb, n);
+    var d: ptr = sbData(sb);
+    memcpy(d + sb[8], s, n);
+    sb[8] = sb[8] + n;
+}

@@ -1,0 +1,9 @@
+fn addStruct(name: ptr) ptr {
+    var n: ptr = allocNode(40);
+    n[STR_NAME] = (int)name;
+    n[STR_SZ] = 0;
+    n[STR_NF] = 0;
+    n[STR_NEXT] = (int)structs;
+    structs = n;
+    return n;
+}

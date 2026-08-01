@@ -1,0 +1,33 @@
+fn declLetVar(isvar: int) void {
+    var name: ptr = curText(); expect(TK_IDENT, "variable name");
+    var typ: ptr = 0;
+    if cur() == 58 { adv(); typ = curText(); adv(); }
+    var hasinit: int = 0;
+    if cur() == 61 { adv(); assign(); hasinit = 1; }
+    if typ == 0 { if hasinit == 1 { typ = vtype; } else { die("declaration needs a type or initializer"); } }
+    if isStructType(typ) != 0 {
+        var an: ptr = newtmp();
+        var n: int = szof(typ);
+        fprintf(tout, "  %s = alloca [%lld x i8]\n", an, n);
+        var p: ptr = newtmp();
+        fprintf(tout, "  %s = bitcast [%lld x i8]* %s to i8*\n", p, n, an);
+        expect(59, "';'");
+        addloc(name, p, typ, 1);
+        return;
+    }
+    var an: ptr = newtmp();
+    var fl: ptr = lltyp(typ);
+    fprintf(tout, "  %s = alloca %s\n", an, fl);
+    if strEq(fl, "void") != 0 { die("cannot init void"); }
+    if hasinit == 1 {
+        if strEq(fl, "i8*") != 0 && isPtrType(vtype) == 0 && isStructType(vtype) == 0 {
+            var p: ptr = newtmp();
+            fprintf(tout, "  %s = inttoptr i64 %s to i8*\n", p, vreg);
+            fprintf(tout, "  store i8* %s, i8** %s\n", p, an);
+        } else {
+            fprintf(tout, "  store %s %s, %s* %s\n", fl, vreg, fl, an);
+        }
+    }
+    expect(59, "';'");
+    addloc(name, an, typ, 1);
+}

@@ -1,0 +1,1 @@
+fn sbData(sb: ptr) ptr { return (ptr)sb[0]; }

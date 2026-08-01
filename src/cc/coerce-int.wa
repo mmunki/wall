@@ -1,0 +1,6 @@
+fn coerceInt(reg: ptr, typ: ptr) ptr {
+    if typ == 0 { return reg; }
+    if strEq(typ, "bool") != 0 { var r: ptr = newtmp(); fprintf(tout, "  %s = zext i1 %s to i64\n", r, reg); return r; }
+    if isPtrType(typ) != 0 || isStructType(typ) != 0 { var r: ptr = newtmp(); fprintf(tout, "  %s = ptrtoint i8* %s to i64\n", r, reg); return r; }
+    return reg;
+}

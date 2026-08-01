@@ -1,0 +1,193 @@
+// ============================================================================
+// WALL STANDARD LIBRARY: lib/string.wa  -- string helpers
+// ----------------------------------------------------------------------------
+// Byte-string utilities on top of the Wall `str` type (a NUL-terminated char
+// array, i.e. i8*). Functions that return strings allocate fresh storage with
+// malloc; the caller is responsible for free().
+//
+//     import "lib/string.wa";
+// ============================================================================
+
+// ---------------- libc -------------------------------------------------------
+extern fn malloc(size: int) ptr;
+extern fn free(p: ptr) void;
+extern fn strlen(s: str) int;
+extern fn strcmp(a: str, b: str) int;
+extern fn memcpy(dst: ptr, src: ptr, n: int) ptr;
+extern fn memset(p: ptr, v: int, n: int) ptr;
+extern fn getbyte(p: ptr) int;
+extern fn setbyte(p: ptr, v: int) void;
+
+// ---------------- length -----------------------------------------------------
+fn slen(s: str) int {
+    return strlen(s);
+}
+fn isEmpty(s: str) int {
+    return strlen(s) == 0 ? 1 : 0;
+}
+
+// ---------------- equality / comparison -------------------------------------
+fn seq(a: str, b: str) int {
+    return strcmp(a, b) == 0 ? 1 : 0;
+}
+fn sneq(a: str, b: str) int {
+    return strcmp(a, b) == 0 ? 0 : 1;
+}
+
+// ---------------- allocation helpers -----------------------------------------
+// Duplicate a string into fresh heap storage.
+fn strdup(s: str) str {
+    var n: int = strlen(s);
+    var p: ptr = (ptr)malloc(n + 1);
+    memcpy(p, s, n);
+    setbyte(p + n, 0);
+    return (str)p;
+}
+// Create a fresh string of the given length, zero-filled.
+fn stralloc(n: int) str {
+    var p: ptr = (ptr)malloc(n + 1);
+    memset(p, 0, n + 1);
+    return (str)p;
+}
+
+// ---------------- concatenation (allocates a new string) ---------------------
+fn concat(a: str, b: str) str {
+    var la: int = strlen(a);
+    var lb: int = strlen(b);
+    var p: ptr = (ptr)malloc(la + lb + 1);
+    memcpy(p, a, la);
+    memcpy(p + la, b, lb);
+    setbyte(p + la + lb, 0);
+    return (str)p;
+}
+fn concat3(a: str, b: str, c: str) str {
+    var la: int = strlen(a);
+    var lb: int = strlen(b);
+    var lc: int = strlen(c);
+    var p: ptr = (ptr)malloc(la + lb + lc + 1);
+    memcpy(p, a, la);
+    memcpy(p + la, b, lb);
+    memcpy(p + la + lb, c, lc);
+    setbyte(p + la + lb + lc, 0);
+    return (str)p;
+}
+
+// ---------------- character access -------------------------------------------
+fn charAt(s: str, i: int) int {
+    if i < 0 || i >= strlen(s) { return 0; }
+    return getbyte(s + i);
+}
+fn firstChar(s: str) int {
+    return getbyte(s);
+}
+fn lastChar(s: str) int {
+    var n: int = strlen(s);
+    if n == 0 { return 0; }
+    var idx: int = n - 1;
+    return getbyte(s + idx);
+}
+
+// ---------------- searching --------------------------------------------------
+fn indexOf(hay: str, needle: int) int {
+    var n: int = strlen(hay);
+    var i: int = 0;
+    while i < n {
+        if getbyte(hay + i) == needle { return i; }
+        i = i + 1;
+    }
+    return -1;
+}
+fn countChar(s: str, ch: int) int {
+    var n: int = strlen(s);
+    var cnt: int = 0;
+    var i: int = 0;
+    while i < n {
+        if getbyte(s + i) == ch { cnt = cnt + 1; }
+        i = i + 1;
+    }
+    return cnt;
+}
+fn hasChar(s: str, ch: int) int {
+    return indexOf(s, ch) >= 0 ? 1 : 0;
+}
+
+// ---------------- substring (allocates) ---------------------------------------
+fn substr(s: str, start: int, len: int) str {
+    var n: int = strlen(s);
+    if start < 0 { start = 0; }
+    if start > n { start = n; }
+    if len < 0 { len = 0; }
+    if start + len > n { len = n - start; }
+    var p: ptr = (ptr)malloc(len + 1);
+    memcpy(p, s + start, len);
+    setbyte(p + len, 0);
+    return (str)p;
+}
+fn left(s: str, len: int) str {
+    return substr(s, 0, len);
+}
+fn right(s: str, len: int) str {
+    var n: int = strlen(s);
+    if len > n { len = n; }
+    return substr(s, n - len, len);
+}
+
+// ---------------- case conversion (allocates) ---------------------------------
+fn toUpper(s: str) str {
+    var n: int = strlen(s);
+    var p: ptr = (ptr)malloc(n + 1);
+    var i: int = 0;
+    while i < n {
+        var c: int = getbyte(s + i);
+        if c >= 97 && c <= 122 { c = c - 32; }
+        setbyte(p + i, c);
+        i = i + 1;
+    }
+    setbyte(p + n, 0);
+    return (str)p;
+}
+fn toLower(s: str) str {
+    var n: int = strlen(s);
+    var p: ptr = (ptr)malloc(n + 1);
+    var i: int = 0;
+    while i < n {
+        var c: int = getbyte(s + i);
+        if c >= 65 && c <= 90 { c = c + 32; }
+        setbyte(p + i, c);
+        i = i + 1;
+    }
+    setbyte(p + n, 0);
+    return (str)p;
+}
+
+// ---------------- predicates ------------------------------------------------
+fn isDigit(c: int) int {
+    if c >= 48 && c <= 57 { return 1; }
+    return 0;
+}
+fn isAlpha(c: int) int {
+    if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) { return 1; }
+    return 0;
+}
+fn isSpace(c: int) int {
+    if c == 32 || c == 9 || c == 10 || c == 13 { return 1; }
+    return 0;
+}
+fn isUpper(c: int) int {
+    if c >= 65 && c <= 90 { return 1; }
+    return 0;
+}
+fn isLower(c: int) int {
+    if c >= 97 && c <= 122 { return 1; }
+    return 0;
+}
+fn isAllDigits(s: str) int {
+    var n: int = strlen(s);
+    if n == 0 { return 0; }
+    var i: int = 0;
+    while i < n {
+        if isDigit(getbyte(s + i)) == 0 { return 0; }
+        i = i + 1;
+    }
+    return 1;
+}

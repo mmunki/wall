@@ -1,0 +1,8 @@
+fn c_isAlpha(c: int) int {
+    if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95 { return 1; }
+    return 0;
+}
+fn isAlnum(c: int) int {
+    if c_isAlpha(c) != 0 || c_isDigit(c) != 0 { return 1; }
+    return 0;
+}

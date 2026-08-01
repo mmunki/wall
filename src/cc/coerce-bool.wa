@@ -1,0 +1,6 @@
+fn coerceBool(reg: ptr, typ: ptr) ptr {
+    if typ != 0 && strEq(typ, "bool") != 0 { return reg; }
+    var r: ptr = newtmp();
+    fprintf(tout, "  %s = icmp ne i64 %s, 0\n", r, reg);
+    return r;
+}

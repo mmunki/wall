@@ -1,0 +1,53 @@
+fn parseGlobal() void {
+    var isv: int = 0;
+    while cur() == K_CONST || cur() == K_UNSIGNED || cur() == K_SIGNED || cur() == K_STATIC {
+        adv();
+        if cur() == K_LET || cur() == K_VAR { adv(); }
+    }
+    if cur() == K_VAR || cur() == K_LET { isv = 1; adv(); }
+    var name: ptr = curText(); expect(TK_IDENT, "variable name");
+    var typ: ptr = 0;
+    if cur() == 58 { adv(); typ = curText(); adv(); }
+    var hasinit: int = 0;
+    var litkind: int = 0; var litint: int = 0; var litfloat: ptr = 0;
+    if cur() == 61 {
+        adv();
+        if cur() == TK_INT { litkind = TK_INT; litint = tokIval(tpos); hasinit = 1; adv(); }
+        elif cur() == TK_FLOAT { litkind = TK_FLOAT; litfloat = tokText(tpos); hasinit = 1; adv(); }
+        else { assign(); hasinit = 1; }
+    }
+    expect(59, "';'");
+    if typ == 0 { typ = "int"; }
+    var fl: ptr = lltyp(typ);
+    var g: ptr = (ptr)malloc(64);
+    snprintf(g, 64, "@%s", name);
+    if hasinit == 1 && litkind == TK_INT && strEq(fl, "i64") != 0 { fprintf(tout, "%s = global %s %lld\n", g, fl, litint); }
+    elif hasinit == 1 && litkind == TK_FLOAT && strEq(fl, "double") != 0 { fprintf(tout, "%s = global %s %s\n", g, fl, litfloat); }
+    elif hasinit == 1 && litkind == TK_INT && strEq(fl, "double") != 0 { fprintf(tout, "%s = global %s %lld.000000e+00\n", g, fl, litint); }
+    elif strEq(fl, "i8*") != 0 { fprintf(tout, "%s = global %s null\n", g, fl); }
+    else { fprintf(tout, "%s = global %s 0\n", g, fl); }
+    addGlobal(name, g, typ, isv);
+}
+  fn top() void {
+      var k: int = cur();
+      if k == K_STRUCT { parseStruct(); }
+     elif k == K_EXTERN { parseExtern(); }
+     elif k == K_FN { parseFn(); }
+     elif k == K_LET || k == K_VAR { parseGlobal(); }
+     elif k == K_CONST || k == K_UNSIGNED || k == K_SIGNED || k == K_STATIC {
+         // parseGlobal skips leading qualifier/var/let keywords itself.
+         parseGlobal();
+     }
+     elif k == K_TYPEDEF {
+         adv();
+         var tname: ptr = curText(); expect(TK_IDENT, "typedef name");
+         expect(61, "'='");
+         var ttyp: ptr = curText(); adv();
+         addTypeAlias(tname, ttyp);
+         expect(59, "';'");
+     }
+     elif k == TK_EOF { return; }
+     else { die("unexpected token at top level"); }
+ }
+
+// ---------------- main -------------------------------------------------------

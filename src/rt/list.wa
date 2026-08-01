@@ -1,0 +1,98 @@
+// ============================================================================
+// WALL STANDARD LIBRARY: lib/list.wa  -- singly-linked list of ints
+// ----------------------------------------------------------------------------
+// A classic singly-linked list. Nodes are 16 bytes: next(0) value(8).
+//
+//     import "lib/list.wa";
+//
+// List operations are O(n); for frequent random access prefer lib/array.wa.
+// ============================================================================
+
+// ---------------- libc -------------------------------------------------------
+extern fn malloc(size: int) ptr;
+extern fn free(p: ptr) void;
+
+// node offsets
+let NODE_NEXT = 0;
+let NODE_VAL = 8;
+
+fn list_new() ptr {
+    return 0; // empty list is a null head pointer
+}
+fn node_new(v: int) ptr {
+    var n: ptr = (ptr)malloc(16);
+    n[NODE_NEXT] = 0;
+    n[NODE_VAL] = v;
+    return n;
+}
+fn list_push_front(head: ptr, v: int) ptr {
+    var n: ptr = node_new(v);
+    n[NODE_NEXT] = (int)head;
+    return n;
+}
+fn list_push_back(head: ptr, v: int) ptr {
+    var n: ptr = node_new(v);
+    if head == 0 { return n; }
+    var cur: ptr = head;
+    while (ptr)cur[NODE_NEXT] != 0 { cur = (ptr)cur[NODE_NEXT]; }
+    cur[NODE_NEXT] = (int)n;
+    return head;
+}
+fn list_len(head: ptr) int {
+    var cnt: int = 0;
+    var cur: ptr = head;
+    while cur != 0 {
+        cnt = cnt + 1;
+        cur = (ptr)cur[NODE_NEXT];
+    }
+    return cnt;
+}
+fn list_empty(head: ptr) int {
+    return head == 0 ? 1 : 0;
+}
+fn list_get(head: ptr, i: int) int {
+    var cur: ptr = head;
+    var k: int = 0;
+    while cur != 0 {
+        if k == i { return cur[NODE_VAL]; }
+        k = k + 1;
+        cur = (ptr)cur[NODE_NEXT];
+    }
+    return 0;
+}
+fn list_contains(head: ptr, v: int) int {
+    var cur: ptr = head;
+    while cur != 0 {
+        if cur[NODE_VAL] == v { return 1; }
+        cur = (ptr)cur[NODE_NEXT];
+    }
+    return 0;
+}
+fn list_free(head: ptr) void {
+    var cur: ptr = head;
+    while cur != 0 {
+        var nx: ptr = (ptr)cur[NODE_NEXT];
+        free(cur);
+        cur = nx;
+    }
+}
+fn list_reverse(head: ptr) ptr {
+    var prev: ptr = 0;
+    var cur: ptr = head;
+    while cur != 0 {
+        var nx: ptr = (ptr)cur[NODE_NEXT];
+        cur[NODE_NEXT] = (int)prev;
+        prev = cur;
+        cur = nx;
+    }
+    return prev;
+}
+fn list_sum(head: ptr) int {
+    var s: int = 0;
+    var cur: ptr = head;
+    while cur != 0 {
+        s = s + cur[NODE_VAL];
+        cur = (ptr)cur[NODE_NEXT];
+    }
+    return s;
+}

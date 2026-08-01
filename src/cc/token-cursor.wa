@@ -1,0 +1,3 @@
+fn cur() int { return tokKind(tpos); }
+fn curText() ptr { return tokText(tpos); }
+fn curLine() int { return tokLine(tpos); }

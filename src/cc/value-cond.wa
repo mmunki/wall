@@ -1,0 +1,3 @@
+fn condval() ptr {
+    return coerceBool(vreg, vtype);
+}

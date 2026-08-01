@@ -1,0 +1,25 @@
+fn multiplicative() void {
+    power();
+    while 1 == 1 {
+        var k: int = cur();
+        if k == 42 {
+            adv(); var save: ptr = vreg; var savet: ptr = vtype; power();
+            var r: ptr = newtmp();
+            fprintf(tout, "  %s = mul i64 %s, %s\n", r, save, vreg);
+            setVal(r, 0, savet, 0);
+        }
+        elif k == 47 {
+            adv(); var save: ptr = vreg; var savet: ptr = vtype; power();
+            var r: ptr = newtmp();
+            fprintf(tout, "  %s = sdiv i64 %s, %s\n", r, save, vreg);
+            setVal(r, 0, savet, 0);
+        }
+        elif k == 37 {
+            adv(); var save: ptr = vreg; var savet: ptr = vtype; power();
+            var r: ptr = newtmp();
+            fprintf(tout, "  %s = srem i64 %s, %s\n", r, save, vreg);
+            setVal(r, 0, savet, 0);
+        }
+        else { break; }
+    }
+}

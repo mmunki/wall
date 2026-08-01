@@ -1,0 +1,8 @@
+fn findloc(name: ptr) ptr {
+    var s: ptr = locals;
+    while s != 0 {
+        if strEq((ptr)s[SYM_NAME], name) { return s; }
+        s = (ptr)s[SYM_NEXT];
+    }
+    return 0;
+}

@@ -1,0 +1,171 @@
+// ============================================================================
+// WALL STANDARD LIBRARY: lib/math.wa  -- integer math helpers
+// ----------------------------------------------------------------------------
+// Pure-Wall integer mathematics. No extern calls beyond libc essentials
+// (malloc/free), so this module is fully portable. Import it in any program:
+//
+//     import "lib/math.wa";
+//
+// The Wall compiler models every int as a 64-bit signed integer.
+// ============================================================================
+
+// ---------------- libc -------------------------------------------------------
+extern fn malloc(size: int) ptr;
+extern fn free(p: ptr) void;
+
+// ---------------- absolute value --------------------------------------------
+fn abs(v: int) int {
+    if v < 0 { return 0 - v; }
+    return v;
+}
+
+// ---------------- min / max --------------------------------------------------
+fn min(a: int, b: int) int {
+    if a < b { return a; }
+    return b;
+}
+fn max(a: int, b: int) int {
+    if a > b { return a; }
+    return b;
+}
+fn clamp(v: int, lo: int, hi: int) int {
+    if v < lo { return lo; }
+    if v > hi { return hi; }
+    return v;
+}
+
+// ---------------- gcd / lcm (Euclid's algorithm) -----------------------------
+fn gcd(a: int, b: int) int {
+    var x: int = abs(a);
+    var y: int = abs(b);
+    while y != 0 {
+        var t: int = x % y;
+        x = y;
+        y = t;
+    }
+    return x;
+}
+fn lcm(a: int, b: int) int {
+    var g: int = gcd(a, b);
+    if g == 0 { return 0; }
+    return abs(a / g * b);
+}
+
+// ---------------- powers -----------------------------------------------------
+fn pow(base: int, exp: int) int {
+    var result: int = 1;
+    var e: int = exp;
+    while e > 0 {
+        result = result * base;
+        e = e - 1;
+    }
+    return result;
+}
+fn isPow2(v: int) int {
+    if v <= 0 { return 0; }
+    return (v & (v - 1)) == 0 ? 1 : 0;
+}
+
+// ---------------- primality / factoring --------------------------------------
+fn isPrime(n: int) int {
+    if n < 2 { return 0; }
+    var i: int = 2;
+    while i * i <= n {
+        if n % i == 0 { return 0; }
+        i = i + 1;
+    }
+    return 1;
+}
+fn nextPrime(n: int) int {
+    var c: int = n;
+    while isPrime(c) == 0 { c = c + 1; }
+    return c;
+}
+fn countPrimes(limit: int) int {
+    var cnt: int = 0;
+    var i: int = 2;
+    while i <= limit {
+        if isPrime(i) != 0 { cnt = cnt + 1; }
+        i = i + 1;
+    }
+    return cnt;
+}
+fn sumDigits(n: int) int {
+    var v: int = abs(n);
+    var s: int = 0;
+    while v > 0 {
+        s = s + (v % 10);
+        v = v / 10;
+    }
+    return s;
+}
+fn numDigits(n: int) int {
+    if n == 0 { return 1; }
+    var v: int = abs(n);
+    var d: int = 0;
+    while v > 0 {
+        v = v / 10;
+        d = d + 1;
+    }
+    return d;
+}
+
+// ---------------- sequences --------------------------------------------------
+fn factorial(n: int) int {
+    if n <= 1 { return 1; }
+    var r: int = 1;
+    var i: int = 2;
+    while i <= n {
+        r = r * i;
+        i = i + 1;
+    }
+    return r;
+}
+fn fibonacci(n: int) int {
+    if n <= 1 { return n; }
+    var a: int = 0;
+    var b: int = 1;
+    var i: int = 2;
+    while i <= n {
+        var t: int = a + b;
+        a = b;
+        b = t;
+        i = i + 1;
+    }
+    return b;
+}
+fn triangular(n: int) int {
+    return n * (n + 1) / 2;
+}
+
+// ---------------- misc integer utilities -------------------------------------
+fn even(n: int) int {
+    return n % 2 == 0 ? 1 : 0;
+}
+fn odd(n: int) int {
+    return n % 2 == 0 ? 0 : 1;
+}
+fn sign(v: int) int {
+    if v > 0 { return 1; }
+    if v < 0 { return -1; }
+    return 0;
+}
+fn rangeSum(from: int, to: int) int {
+    var s: int = 0;
+    var i: int = from;
+    while i <= to {
+        s = s + i;
+        i = i + 1;
+    }
+    return s;
+}
+fn max3(a: int, b: int, c: int) int {
+    var m: int = max(a, b);
+    m = max(m, c);
+    return m;
+}
+fn min3(a: int, b: int, c: int) int {
+    var m: int = min(a, b);
+    m = min(m, c);
+    return m;
+}

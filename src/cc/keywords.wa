@@ -1,0 +1,39 @@
+fn isKw(s: ptr, n: int) int {
+    if strEq2(s, "let", n) { return K_LET; }
+    if strEq2(s, "var", n) { return K_VAR; }
+    if strEq2(s, "fn", n) { return K_FN; }
+    if strEq2(s, "extern", n) { return K_EXTERN; }
+    if strEq2(s, "struct", n) { return K_STRUCT; }
+    if strEq2(s, "if", n) { return K_IF; }
+    if strEq2(s, "elif", n) { return K_ELIF; }
+    if strEq2(s, "else", n) { return K_ELSE; }
+    if strEq2(s, "while", n) { return K_WHILE; }
+    if strEq2(s, "do", n) { return K_DO; }
+    if strEq2(s, "const", n) { return K_CONST; }
+    if strEq2(s, "unsigned", n) { return K_UNSIGNED; }
+    if strEq2(s, "signed", n) { return K_SIGNED; }
+    if strEq2(s, "static", n) { return K_STATIC; }
+    if strEq2(s, "typedef", n) { return K_TYPEDEF; }
+    if strEq2(s, "for", n) { return K_FOR; }
+    if strEq2(s, "return", n) { return K_RETURN; }
+    if strEq2(s, "break", n) { return K_BREAK; }
+    if strEq2(s, "continue", n) { return K_CONTINUE; }
+    if strEq2(s, "true", n) { return K_TRUE; }
+    if strEq2(s, "false", n) { return K_FALSE; }
+    if strEq2(s, "null", n) { return K_NULL; }
+    if strEq2(s, "int", n) { return K_INT; }
+    if strEq2(s, "float", n) { return K_FLOAT; }
+    if strEq2(s, "bool", n) { return K_BOOL; }
+    if strEq2(s, "str", n) { return K_STR; }
+    if strEq2(s, "void", n) { return K_VOID; }
+    if strEq2(s, "ptr", n) { return K_PTR; }
+    if strEq2(s, "char", n) { return K_CHAR; }
+    if strEq2(s, "byte", n) { return K_BYTE; }
+    if strEq2(s, "u8", n) { return K_U8; }
+    if strEq2(s, "switch", n) { return K_SWITCH; }
+    if strEq2(s, "case", n) { return K_CASE; }
+    if strEq2(s, "default", n) { return K_DEFAULT; }
+    if strEq2(s, "sizeof", n) { return K_SIZEOF; }
+    if strEq2(s, "match", n) { return K_MATCH; }
+    return 0;
+}

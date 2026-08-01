@@ -1,0 +1,8 @@
+fn expect(kind: int, what: ptr) void {
+    if cur() != kind {
+        fprintf(tout, "wall: line %d: error: expected %s\n", curLine(), what);
+        exit(1);
+    }
+    adv();
+}
+

@@ -1,0 +1,8 @@
+fn findFunc(name: ptr) ptr {
+    var f: ptr = funcs;
+    while f != 0 {
+        if strEq((ptr)f[FUN_NAME], name) { return f; }
+        f = (ptr)f[FUN_NEXT];
+    }
+    return 0;
+}

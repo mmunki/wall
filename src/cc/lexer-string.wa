@@ -1,0 +1,37 @@
+fn lexStr() void {
+    var sb: ptr = sbNew();
+    spos = spos + 1;
+    while spos < srclen {
+        var c: int = getbyte(csrc + spos);
+        if c == 34 { spos = spos + 1; break; }
+        if c == 10 { die("unterminated string literal"); }
+        if c == 92 {
+            spos = spos + 1;
+            var e: int = getbyte(csrc + spos);
+            if e >= 48 && e <= 55 {
+                var ov: int = 0;
+                var od: int = 0;
+                while od < 3 && spos < srclen {
+                    var oc: int = getbyte(csrc + spos);
+                    if oc < 48 || oc > 55 { break; }
+                    ov = ov * 8 + (oc - 48);
+                    spos = spos + 1;
+                    od = od + 1;
+                }
+                sbAppendChar(sb, ov);
+            } elif e == 110 { sbAppendChar(sb, 10); spos = spos + 1; }
+            elif e == 116 { sbAppendChar(sb, 9); spos = spos + 1; }
+            elif e == 114 { sbAppendChar(sb, 13); spos = spos + 1; }
+            elif e == 48 { sbAppendChar(sb, 0); spos = spos + 1; }
+            elif e == 92 { sbAppendChar(sb, 92); spos = spos + 1; }
+            elif e == 34 { sbAppendChar(sb, 34); spos = spos + 1; }
+            elif e == 39 { sbAppendChar(sb, 39); spos = spos + 1; }
+            else { sbAppendChar(sb, e); spos = spos + 1; }
+        } else { sbAppendChar(sb, c); spos = spos + 1; }
+    }
+    sbAppendChar(sb, 0);
+    var n: int = sbLen(sb) - 1;
+    var t: ptr = sbData(sb);
+    pushTok(TK_STR, t, n, line);
+    free(sb);
+}

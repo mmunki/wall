@@ -1,0 +1,9 @@
+fn isType(t: ptr) int {
+    if t == 0 { return 0; }
+    if strEq(t, "int") != 0 || strEq(t, "float") != 0 || strEq(t, "bool") != 0 { return 1; }
+    if strEq(t, "str") != 0 || strEq(t, "void") != 0 || strEq(t, "ptr") != 0 { return 1; }
+    if strEq(t, "char") != 0 || strEq(t, "byte") != 0 || strEq(t, "u8") != 0 { return 1; }
+    if isStructType(t) != 0 { return 1; }
+    if findAlias(t) != 0 { return 1; }
+    return 0;
+}

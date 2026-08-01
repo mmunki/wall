@@ -1,0 +1,9 @@
+fn szof(t: ptr) int {
+    t = resolveType(t);
+    if strEq(t, "int") || strEq(t, "float") || strEq(t, "str") || strEq(t, "ptr") { return 8; }
+    if strEq(t, "bool") || strEq(t, "char") || strEq(t, "byte") || strEq(t, "u8") { return 1; }
+    var s: ptr = findStruct(t);
+    if s != 0 { return s[STR_SZ]; }
+    return 8;
+}
+

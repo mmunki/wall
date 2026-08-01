@@ -1,0 +1,5 @@
+fn sbNew() ptr {
+    var sb: ptr = (ptr)malloc(24);
+    memset((ptr)sb, 0, 24);
+    return sb;
+}

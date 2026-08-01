@@ -1,0 +1,1 @@
+fn adv() void { tpos = tpos + 1; }

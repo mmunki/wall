@@ -1,0 +1,4 @@
+fn sbFree(sb: ptr) void {
+    if sb[0] != 0 { free((ptr)sb[0]); }
+    free(sb);
+}

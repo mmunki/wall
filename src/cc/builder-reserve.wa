@@ -1,0 +1,10 @@
+fn sbReserve(sb: ptr, n: int) void {
+    var need: int = sb[8] + n;
+    if need > sb[16] {
+        var nc: int = sb[16];
+        if nc == 0 { nc = 32; }
+        while nc < need { nc = nc * 2; }
+        sb[0] = (int)realloc((ptr)sb[0], nc);
+        sb[16] = nc;
+    }
+}

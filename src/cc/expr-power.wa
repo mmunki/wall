@@ -1,0 +1,35 @@
+fn power() void {
+    unary();
+    if cur() == TK_STARSTAR {
+        adv();
+        var av: ptr = vreg; var at: ptr = vtype;
+        var a: ptr = coerceInt(av, at);
+        power();
+        var b: ptr = coerceInt(vreg, vtype);
+        var lp: ptr = newlabel(".PL"); var bd: ptr = newlabel(".PB"); var ex: ptr = newlabel(".PX");
+        var acc: ptr = newtmp(); var i: ptr = newtmp();
+        fprintf(tout, "  %s = alloca i64\n", acc);
+        fprintf(tout, "  %s = alloca i64\n", i);
+        fprintf(tout, "  store i64 1, i64* %s\n", acc);
+        fprintf(tout, "  store i64 0, i64* %s\n", i);
+        fprintf(tout, "  br label %%%s\n", lp);
+        fprintf(tout, "%s:\n", lp);
+        var iv: ptr = newtmp(); var cv: ptr = newtmp();
+        fprintf(tout, "  %s = load i64, i64* %s\n", iv, i);
+        fprintf(tout, "  %s = icmp slt i64 %s, %s\n", cv, iv, b);
+        fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", cv, bd, ex);
+        fprintf(tout, "%s:\n", bd);
+        var avv: ptr = newtmp(); var mv: ptr = newtmp(); var i2: ptr = newtmp();
+        fprintf(tout, "  %s = load i64, i64* %s\n", avv, acc);
+        fprintf(tout, "  %s = mul i64 %s, %s\n", mv, avv, a);
+        fprintf(tout, "  store i64 %s, i64* %s\n", mv, acc);
+        fprintf(tout, "  %s = add i64 %s, 1\n", i2, iv);
+        fprintf(tout, "  store i64 %s, i64* %s\n", i2, i);
+        fprintf(tout, "  br label %%%s\n", lp);
+        fprintf(tout, "%s:\n", ex);
+        var r: ptr = newtmp();
+        fprintf(tout, "  %s = load i64, i64* %s\n", r, acc);
+        setVal(r, 0, at, 0);
+        return;
+    }
+}

@@ -1,0 +1,187 @@
+// ============================================================================
+// WALL COMPILER  (csrc/wall.wa)   -- self-hosted Wall compiler
+// ----------------------------------------------------------------------------
+// Written entirely in Wall. Compiled once by the C stage-0 seed; from then on
+// Wall compiles itself (bootstrap):
+//     stage0/cc  wall.wa  ->  wall-compiler  (native, pure Wall+LLVM)
+//     wall-compiler foo.wa ->  foo.ll -> llc -> .o -> ld.lld -> foo
+// ============================================================================
+
+// ---------------- libc externs ---------------------------------------------
+extern fn malloc(size: int) ptr;
+extern fn free(p: ptr) void;
+extern fn realloc(p: ptr, size: int) ptr;
+extern fn memcpy(dst: ptr, csrc: ptr, n: int) ptr;
+extern fn memset(p: ptr, v: int, n: int) ptr;
+extern fn fopen(path: str, mode: str) ptr;
+extern fn fread(buf: ptr, size: int, count: int, f: ptr) int;
+extern fn fwrite(buf: ptr, size: int, count: int, f: ptr) int;
+extern fn fclose(f: ptr) int;
+extern fn feof(f: ptr) int;
+extern fn fflush(f: ptr) int;
+extern fn strlen(s: str) int;
+extern fn strcmp(a: str, b: str) int;
+extern fn printf(fmt: str, ...) int;
+extern fn fprintf(f: ptr, fmt: str, ...) int;
+extern fn snprintf(buf: ptr, n: int, fmt: str, ...) int;
+extern fn exit(code: int) void;
+extern fn getbyte(p: ptr) int;
+extern fn setbyte(p: ptr, v: int) void;
+extern fn arge() int;
+extern fn argp(i: int) str;
+
+// ---------------- token kinds ----------------------------------------------
+let TK_EOF = 256;
+let TK_INT = 257; let TK_FLOAT = 258; let TK_STR = 259; let TK_IDENT = 260;
+let K_LET = 261; let K_VAR = 262; let K_FN = 263; let K_EXTERN = 264;
+let K_STRUCT = 265; let K_IF = 266; let K_ELIF = 267; let K_ELSE = 268;
+let K_WHILE = 269; let K_FOR = 270; let K_RETURN = 271; let K_BREAK = 272;
+let K_CONTINUE = 273; let K_TRUE = 274; let K_FALSE = 275; let K_NULL = 276;
+let K_INT = 277; let K_FLOAT = 278; let K_BOOL = 279; let K_STR = 280;
+let K_VOID = 281; let K_PTR = 282;
+let TK_EQEQ = 283; let TK_NE = 284; let TK_LE = 285; let TK_GE = 286;
+let TK_ANDAND = 287; let TK_OROR = 288; let TK_PLUSPLUS = 289;
+let TK_MINUSMINUS = 290; let TK_PLUSEQ = 291; let TK_MINUSEQ = 292;
+let TK_STAREQ = 293; let TK_SLASHEQ = 294; let TK_PERCENTEQ = 295;
+let TK_AMPEQ = 296; let TK_PIPEEQ = 297; let TK_CARETEQ = 298;
+let TK_SHL = 299; let TK_SHR = 300; let TK_SHLEQ = 301; let TK_SHREQ = 302;
+let TK_ARROW = 303; let TK_ELLIPSIS = 304;
+let K_SWITCH = 305; let K_CASE = 306; let K_DEFAULT = 307; let K_SIZEOF = 308;
+let K_MATCH = 309; let K_CHAR = 310; let K_BYTE = 311; let K_U8 = 312;
+let K_DO = 313; let K_CONST = 314; let K_UNSIGNED = 315; let K_SIGNED = 316;
+let K_STATIC = 317; let K_TYPEDEF = 318;
+let TK_QQ      = 319;   // ??  null-coalescing
+let TK_QQEQ    = 320;   // ??= null-coalescing assign
+let TK_ANDANDEQ= 321;   // &&= logical-and assign
+let TK_OROREQ  = 322;   // ||= logical-or assign
+let TK_STARSTAR= 323;   // **  exponentiation (power)
+let TK_STARSTAREQ= 324; // **= power assign
+let TK_TRIPLEEQ= 325;   // === strict equality
+let TK_TRIPLENE= 326;   // !== strict inequality
+let TK_SPACESHIP= 327;  // <=> three-way compare
+let TK_USHR    = 328;   // >>> unsigned (logical) shift right
+
+// token struct (stride 32 bytes): kind(0) text(8) ival(16) line(24)
+let TOK_KIND = 0; let TOK_TEXT = 8; let TOK_IVAL = 16; let TOK_LINE = 24;
+
+// ---------------- global state ---------------------------------------------
+var csrc: ptr = 0;      // pointer to source bytes
+var srclen: int = 0;   // source length
+var spos: int = 0;     // scan position
+var line: int = 1;     // current line
+var toks: ptr = 0;     // SB holding token bytes
+var tpos: int = 0;     // token index
+var tout: ptr = 0;     // output FILE*
+var tmpn: int = 0;     // ssa temp counter
+var labeln: int = 0;   // label counter
+var curret: ptr = 0;   // current return type (string)
+var loopdepth: int = 0;
+var brkstk0: ptr = 0; var brkstk1: ptr = 0; var brkstk2: ptr = 0;
+var brkstk3: ptr = 0; var brkstk4: ptr = 0; var brkstk5: ptr = 0;
+var brkstk6: ptr = 0; var brkstk7: ptr = 0; var brkstk8: ptr = 0;
+var brkstk9: ptr = 0; var brkstk10: ptr = 0; var brkstk11: ptr = 0;
+var brkstk12: ptr = 0; var brkstk13: ptr = 0; var brkstk14: ptr = 0;
+var brkstk15: ptr = 0;
+var contstk0: ptr = 0; var contstk1: ptr = 0; var contstk2: ptr = 0;
+var contstk3: ptr = 0; var contstk4: ptr = 0; var contstk5: ptr = 0;
+var contstk6: ptr = 0; var contstk7: ptr = 0; var contstk8: ptr = 0;
+var contstk9: ptr = 0; var contstk10: ptr = 0; var contstk11: ptr = 0;
+var contstk12: ptr = 0; var contstk13: ptr = 0; var contstk14: ptr = 0;
+var contstk15: ptr = 0;
+
+// symbol tables (linked lists of raw-byte nodes)
+var syms: ptr = 0;   // globals + functions
+var locals: ptr = 0; // locals of current function
+// sym node layout: next(0) name(8) ll(16) typ(24) isvar(32) isfunc(40) = 48
+let SYM_NEXT = 0; let SYM_NAME = 8; let SYM_LL = 16; let SYM_TYP = 24;
+let SYM_ISVAR = 32; let SYM_ISFUNC = 40;
+
+var funcs: ptr = 0;  // function signatures
+// func node: next(0) name(8) ret(16) pts(24) np(32) variadic(40) defined(48) = 56
+let FUN_NEXT = 0; let FUN_NAME = 8; let FUN_RET = 16; let FUN_PTS = 24;
+let FUN_NP = 32; let FUN_VAR = 40; let FUN_DEF = 48;
+
+var structs: ptr = 0; // struct definitions
+// struct node: next(0) name(8) sz(16) nf(24) fields(32) = 40
+let STR_NEXT = 0; let STR_NAME = 8; let STR_SZ = 16; let STR_NF = 24;
+let STR_FIELDS = 32;
+
+var aliases: ptr = 0; // typedef aliases: name(8) -> target type(16), next(0)
+let AL_NEXT = 0; let AL_NAME = 8; let AL_TARGET = 16;
+// field node: next(0) name(8) typ(16) off(24) sz(32) = 40
+let FLD_NEXT = 0; let FLD_NAME = 8; let FLD_TYP = 16; let FLD_OFF = 24;
+let FLD_SZ = 32;
+
+// string constant definitions collected at module end
+var strdefs: ptr = 0; // SB of concatenated global constant defs
+var nstr: int = 0;
+var sid: int = 0;     // global string id counter
+
+// ---------------- forward declarations (for mutual recursion) ---------------
+extern fn sbNew() ptr;
+extern fn sbFree(sb: ptr) void;
+extern fn sbLen(sb: ptr) int;
+extern fn sbData(sb: ptr) ptr;
+extern fn sbReserve(sb: ptr, n: int) void;
+extern fn sbAppendChar(sb: ptr, c: int) void;
+extern fn sbAppendCStr(sb: ptr, s: ptr) void;
+extern fn sbAppendI64(sb: ptr, v: int) void;
+extern fn sbAppendStr(sb: ptr, s: ptr) void;
+extern fn die(msg: str) void;
+extern fn isKw(s: ptr, n: int) int;
+extern fn lex() void;
+ extern fn top() void;
+ extern fn stmt() void;
+extern fn assign() void;
+extern fn coalesce() void;
+extern fn logicOr() void;
+extern fn logicAnd() void;
+extern fn bitOr() void;
+extern fn bitXor() void;
+extern fn bitAnd() void;
+extern fn equality() void;
+extern fn relational() void;
+extern fn additive() void;
+extern fn shift() void;
+extern fn multiplicative() void;
+extern fn power() void;
+extern fn unary() void;
+extern fn postfix() void;
+extern fn primary() void;
+extern fn callArgs() void;
+extern fn block() void;
+extern fn parseGlobal() void;
+extern fn parseStruct() void;
+extern fn parseExtern() void;
+extern fn parseFn() void;
+extern fn emitIf() void;
+extern fn emitSwitch() void;
+extern fn declLetVar(isvar: int) void;
+extern fn addloc(name: ptr, ll: ptr, typ: ptr, isv: int) void;
+extern fn addGlobal(name: ptr, ll: ptr, typ: ptr, isv: int) void;
+extern fn findall(name: ptr) ptr;
+extern fn findloc(name: ptr) ptr;
+extern fn addFunc(name: ptr, ret: ptr, np: int, variadic: int) ptr;
+extern fn addParamType(f: ptr, t: ptr) void;
+extern fn findFunc(name: ptr) ptr;
+extern fn addStruct(name: ptr) ptr;
+extern fn addField(st: ptr, name: ptr, typ: ptr) void;
+extern fn findStruct(name: ptr) ptr;
+extern fn findField(st: ptr, name: ptr) ptr;
+extern fn lltyp(t: ptr) ptr;
+extern fn szof(t: ptr) int;
+extern fn isStructType(t: ptr) int;
+extern fn isPtrType(t: ptr) int;
+extern fn isType(t: ptr) int;
+extern fn addTypeAlias(name: ptr, target: ptr) void;
+extern fn resolveType(t: ptr) ptr;
+extern fn newtmp() ptr;
+extern fn newlabel(pfx: ptr) ptr;
+extern fn loadval() void;
+extern fn pushLoop(b: ptr, c: ptr) void;
+extern fn popLoop() void;
+extern fn strEq(a: ptr, b: ptr) int;
+extern fn strEq2(s: ptr, lit: str, n: int) int;
+extern fn sbAppendToStrlist(list: ptr, s: ptr) ptr;
+extern fn coerceBool(reg: ptr, typ: ptr) ptr;
+

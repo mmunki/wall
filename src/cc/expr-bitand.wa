@@ -1,0 +1,4 @@
+fn bitAnd() void {
+    equality();
+    while 1 == 1 { if cur() == 38 { adv(); var save: ptr = vreg; var sa: ptr = vtype; equality(); var r: ptr = newtmp(); fprintf(tout, "  %s = and i64 %s, %s\n", r, save, vreg); setVal(r, 0, sa, 0); } else { break; } }
+}

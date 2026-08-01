@@ -1,0 +1,10 @@
+fn addloc(name: ptr, ll: ptr, typ: ptr, isv: int) void {
+    var n: ptr = allocNode(48);
+    n[SYM_NAME] = (int)name;
+    n[SYM_LL] = (int)ll;
+    n[SYM_TYP] = (int)typ;
+    n[SYM_ISVAR] = isv;
+    n[SYM_ISFUNC] = 0;
+    n[SYM_NEXT] = (int)locals;
+    locals = n;
+}

@@ -1,0 +1,19 @@
+fn shift() void {
+    additive();
+    while 1 == 1 {
+        var k: int = cur();
+        if k == TK_SHL || k == TK_SHR || k == TK_USHR {
+            adv();
+            var save: ptr = vreg; var sa: ptr = vtype;
+            additive();
+            var l: ptr = coerceInt(save, sa);
+            var r: ptr = coerceInt(vreg, vtype);
+            var rr: ptr = newtmp();
+            if k == TK_SHL { fprintf(tout, "  %s = shl i64 %s, %s\n", rr, l, r); }
+            elif k == TK_SHR { fprintf(tout, "  %s = ashr i64 %s, %s\n", rr, l, r); }
+            else { fprintf(tout, "  %s = lshr i64 %s, %s\n", rr, l, r); }
+            setVal(rr, 0, sa, 0);
+        }
+        else { break; }
+    }
+}

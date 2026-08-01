@@ -1,0 +1,5 @@
+// ---------------- runtime: string builder -----------------------------------
+fn strEq(a: ptr, b: ptr) int {
+    if strcmp(a, b) == 0 { return 1; }
+    return 0;
+}

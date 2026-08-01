@@ -1,0 +1,84 @@
+// ============================================================================
+// WALL DRIVER MODULE: libembed.wa  -- embedded standard library
+// ----------------------------------------------------------------------------
+// To make libwall.so fully self-contained, the contents of the standard
+// library modules (lib/*.wa) are base64-encoded and compiled into the shared
+// object as string constants. At preprocess time, when the driver encounters
+// an `import "lib/xxx.wa"` whose file is not present on disk, it decodes the
+// matching embedded module instead. This keeps the toolchain functional even
+// when no lib/ directory is shipped alongside libwall.so.
+//
+// libnames / libdata / libcnt are filled in by an auto-generated block
+// (libdata.wa) that is concatenated into the same translation unit.
+// ============================================================================
+
+// ---------------- generated stdlib metadata (set by libdata.wa) ---------------
+var libcnt: int = 0;        // number of embedded modules
+var libnames: ptr = 0;      // array of NUL-terminated module names
+var libdata: ptr = 0;       // array of NUL-terminated base64 payloads
+
+// ---------------- base64 decoder ----------------------------------------------
+// b64decode: decode a NUL-terminated base64 string into freshly-allocated
+// NUL-terminated bytes. Returns 0 on error. The base64 alphabet is the
+// standard A-Za-z0-9+/ set with '=' padding.
+fn b64val(c: int) int {
+    if c >= 65 && c <= 90 { return c - 65; }        // A-Z
+    if c >= 97 && c <= 122 { return c - 97 + 26; }  // a-z
+    if c >= 48 && c <= 57 { return c - 48 + 52; }   // 0-9
+    if c == 43 { return 62; }                       // +
+    if c == 47 { return 63; }                       // /
+    return -1;
+}
+
+fn b64decode(b64: ptr) ptr {
+    var inlen: int = 0;
+    while getbyte(b64 + inlen) != 0 { inlen = inlen + 1; }
+    var outlen: int = (inlen / 4) * 3;
+    var out: ptr = (ptr)malloc(outlen + 1);
+    var o: int = 0;
+    var i: int = 0;
+    while i + 4 <= inlen {
+        var b0: int = b64val(getbyte(b64 + i));
+        var b1: int = b64val(getbyte(b64 + i + 1));
+        var b2: int = b64val(getbyte(b64 + i + 2));
+        var b3: int = b64val(getbyte(b64 + i + 3));
+        var c1: int = (b0 * 4) + (b1 / 16);
+        setbyte(out + o, c1); o = o + 1;
+        if getbyte(b64 + i + 2) != 61 {
+            var c2: int = ((b1 - ((b1 / 16) * 16)) * 16) + (b2 / 4);
+            setbyte(out + o, c2); o = o + 1;
+        }
+        if getbyte(b64 + i + 3) != 61 {
+            var c3: int = ((b2 - ((b2 / 4) * 4)) * 64) + b3;
+            setbyte(out + o, c3); o = o + 1;
+        }
+        i = i + 4;
+    }
+    setbyte(out + o, 0);
+    return out;
+}
+
+// ---------------- lookup -------------------------------------------------------
+// liblookup: return the decoded source text of an embedded module whose name
+// matches the given string, or 0 if not embedded.
+fn liblookup(name: ptr) ptr {
+    var i: int = 0;
+    while i < libcnt {
+        var nm: ptr = (ptr)libnames[i * 8];
+        if strcmp(nm, name) == 0 {
+            return b64decode((ptr)libdata[i * 8]);
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+// libbasename: extract the basename of a path string into the string builder.
+fn libbasename(p: ptr) void {
+    var len: int = strlen(p);
+    var st: int = 0;
+    var i: int = 0;
+    while i < len { if getbyte(p + i) == 47 { st = i + 1; } i = i + 1; }
+    bInit();
+    while st < len { bCatC(getbyte(p + st)); st = st + 1; }
+}

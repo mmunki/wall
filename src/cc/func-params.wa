@@ -1,0 +1,12 @@
+fn addParamType(f: ptr, t: ptr) void {
+    var np: int = f[FUN_NP];
+    var pts: ptr = (ptr)f[FUN_PTS];
+    var idx: int = 0;
+    while idx < np {
+        if pts[idx * 8] == 0 { pts[idx * 8] = (int)t; return; }
+        idx = idx + 1;
+    }
+    // append
+    pts[np * 8] = (int)t;
+    f[FUN_NP] = np + 1;
+}

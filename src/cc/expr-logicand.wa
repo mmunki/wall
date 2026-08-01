@@ -1,0 +1,4 @@
+fn logicAnd() void {
+    bitOr();
+    while 1 == 1 { if cur() == TK_ANDAND { adv(); var save: ptr = vreg; var savet: ptr = vtype; bitOr(); var l: ptr = coerceBool(save, savet); var r: ptr = coerceBool(vreg, vtype); var rr: ptr = newtmp(); fprintf(tout, "  %s = and i1 %s, %s\n", rr, l, r); setVal(rr, 0, "bool", 0); } else { break; } }
+}

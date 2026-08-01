@@ -1,0 +1,86 @@
+fn buildOptCmd() void {
+    bInit();
+    bCat("opt -O"); bCatI(optlevel); bCat(" "); bCat(TMPD); bCat("w.ll");
+    if optargs != 0 { bCat(optargs); }
+    bCat(" -o "); bCat(TMPD); bCat("w.opt.ll");
+}
+
+fn buildLlvmObjCmd() void {
+    bInit();
+    bCat("llc");
+    if pic == 1 { bCat(" -relocation-model=pic"); }
+    bCat(" -filetype=obj -O"); bCatI(optlevel);
+    if llcargs != 0 { bCat(llcargs); }
+    bCat(" -o "); bCat(TMPD); bCat("w.o "); bCat(TMPD); bCat("w.opt.ll");
+}
+
+fn buildLlvmAsmCmd() void {
+    bInit();
+    bCat("llc -filetype=asm -O"); bCatI(optlevel);
+    bCat(" -o "); bCat(TMPD); bCat("w.s "); bCat(TMPD); bCat("w.opt.ll");
+}
+
+fn buildLinkCmd() void {
+    bInit();
+    if shared == 1 {
+        bCat("ld.lld --sysroot="); bCat(SYSROOT); bCat(" -EL --hash-style=gnu -shared -o ");
+        bCat(output); bCat(" "); bCat(TMPD); bCat("w.o -L"); bCat(SYSROOT); bCat("/lib -L/system/lib64");
+    } else {
+        bCat("ld.lld --sysroot="); bCat(SYSROOT);
+        bCat(" -EL --fix-cortex-a53-843419 -z now -z relro -z max-page-size=16384");
+        bCat(" --no-rosegment --hash-style=gnu --eh-frame-hdr -m aarch64linux");
+        if pie == 1 { bCat(" -pie -dynamic-linker "); bCat(DYNLINK); }
+        bCat(" -o "); bCat(output); bCat(" "); bCat(TMPD); bCat("w.o ");
+        if linkargs != 0 { bCat(linkargs); bCat(" "); }
+        bCat(SYSROOT); bCat("/lib/crtbegin_dynamic.o -L"); bCat(SYSROOT); bCat("/lib -L/system/lib64");
+        bCat(" -l:libunwind.a -ldl -lc "); bCat(SYSROOT); bCat("/lib/crtend_android.o");
+    }
+}
+
+fn compileAndLink() int {
+    var irl: ptr = (ptr)malloc(4096);
+    bInit(); bCat(TMPD); bCat("w.ll");
+    memcpy(irl, bbuf, blen + 1);
+    einfo("compiling to LLVM IR");
+    var rc: int = wall_compile(src, irl);
+    if rc != 0 { eerr("compilation failed"); return 1; }
+    eok("IR emitted");
+
+    if emit_ir == 1 {
+        bInit(); bCat("cp "); bCat(TMPD); bCat("w.ll "); bCat(output);
+        run();
+        eok("IR saved to output");
+        return 0;
+    }
+
+    buildOptCmd();
+    einfo("optimizing IR");
+    if run() != 0 { eerr("opt failed"); return 1; }
+    eok("optimization complete");
+
+    if emit_asm == 1 {
+        buildLlvmAsmCmd();
+        einfo("emitting assembly");
+        if run() != 0 { eerr("llc(asm) failed"); return 1; }
+        eok("assembly emitted");
+        return 0;
+    }
+
+    buildLlvmObjCmd();
+    einfo("generating object code");
+    if run() != 0 { eerr("llc failed"); return 1; }
+    eok("object emitted");
+
+    if emit_obj == 1 || do_link == 0 {
+        bInit(); bCat("cp "); bCat(TMPD); bCat("w.o "); bCat(output);
+        run();
+        eok("object saved to output");
+        return 0;
+    }
+
+    buildLinkCmd();
+    einfo("linking final binary");
+    if run() != 0 { eerr("linking failed"); return 1; }
+    eok("link complete");
+    return 0;
+}

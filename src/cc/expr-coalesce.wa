@@ -1,0 +1,25 @@
+fn coalesce() void {
+    logicOr();
+    while 1 == 1 {
+        if cur() == TK_QQ {
+            adv();
+            var la: ptr = vreg; var lat: ptr = vtype;
+            var ca: ptr = coerceInt(la, lat);
+            var cb: ptr = newtmp();
+            fprintf(tout, "  %s = icmp ne i64 %s, 0\n", cb, ca);
+            var tl: ptr = newlabel(".CQT"); var el: ptr = newlabel(".CQE"); var ml: ptr = newlabel(".CQM");
+            fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", cb, tl, el);
+            fprintf(tout, "%s:\n", tl);
+            fprintf(tout, "  br label %%%s\n", ml);
+            fprintf(tout, "%s:\n", el);
+            logicOr();
+            var rb: ptr = coerceInt(vreg, vtype);
+            fprintf(tout, "  br label %%%s\n", ml);
+            fprintf(tout, "%s:\n", ml);
+            var r: ptr = newtmp();
+            fprintf(tout, "  %s = phi i64 [ %s, %%%s ], [ %s, %%%s ]\n", r, ca, tl, rb, el);
+            setVal(r, 0, lat, 0);
+        }
+        else { break; }
+    }
+}

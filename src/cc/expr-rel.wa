@@ -1,0 +1,32 @@
+fn relational() void {
+    shift();
+    while 1 == 1 {
+        var k: int = cur();
+        if k == 60 || k == 62 || k == TK_LE || k == TK_GE || k == TK_SPACESHIP {
+            adv();
+            var save: ptr = vreg; var savet: ptr = vtype;
+            shift();
+            var l: ptr = coerceInt(save, savet);
+            var r: ptr = coerceInt(vreg, vtype);
+            var rr: ptr = newtmp();
+            if k == 60 { fprintf(tout, "  %s = icmp slt i64 %s, %s\n", rr, l, r); }
+            elif k == 62 { fprintf(tout, "  %s = icmp sgt i64 %s, %s\n", rr, l, r); }
+            elif k == TK_LE { fprintf(tout, "  %s = icmp sle i64 %s, %s\n", rr, l, r); }
+            elif k == TK_GE { fprintf(tout, "  %s = icmp sge i64 %s, %s\n", rr, l, r); }
+            else {
+                // spaceship <=>  :  returns -1, 0 or 1
+                var lt: ptr = newtmp(); var gt: ptr = newtmp();
+                var g64: ptr = newtmp(); var l64: ptr = newtmp();
+                fprintf(tout, "  %s = icmp slt i64 %s, %s\n", lt, l, r);
+                fprintf(tout, "  %s = icmp sgt i64 %s, %s\n", gt, l, r);
+                fprintf(tout, "  %s = zext i1 %s to i64\n", g64, gt);
+                fprintf(tout, "  %s = zext i1 %s to i64\n", l64, lt);
+                fprintf(tout, "  %s = sub i64 %s, %s\n", rr, g64, l64);
+                setVal(rr, 0, "int", 0);
+                continue;
+            }
+            setVal(rr, 0, "bool", 0);
+        }
+        else { break; }
+    }
+}

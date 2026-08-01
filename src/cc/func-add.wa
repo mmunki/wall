@@ -1,0 +1,16 @@
+fn addFunc(name: ptr, ret: ptr, np: int, variadic: int) ptr {
+    // Deduplicate by name: re-declaring the same function (e.g. a libc extern
+    // seen in several imported modules) must reuse the existing record so the
+    // final IR does not emit conflicting `declare` lines.
+    var pre: ptr = findFunc(name);
+    if pre != 0 { return pre; }
+    var f: ptr = allocNode(56);
+    f[FUN_NAME] = (int)name;
+    f[FUN_RET] = (int)ret;
+    f[FUN_NP] = np;
+    f[FUN_VAR] = variadic;
+    f[FUN_PTS] = (int)allocNode(16 * 8);
+    f[FUN_NEXT] = (int)funcs;
+    funcs = f;
+    return f;
+}

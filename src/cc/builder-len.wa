@@ -1,0 +1,1 @@
+fn sbLen(sb: ptr) int { return sb[8]; }

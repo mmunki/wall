@@ -1,0 +1,7 @@
+fn addTypeAlias(name: ptr, target: ptr) void {
+    var n: ptr = (ptr)malloc(24);
+    n[AL_NAME] = (int)name;
+    n[AL_TARGET] = (int)target;
+    n[AL_NEXT] = (int)aliases;
+    aliases = n;
+}

@@ -1,0 +1,92 @@
+fn lex() void {
+    while 1 == 1 {
+        skipWs();
+        if spos >= srclen { var et: ptr = (ptr)malloc(1); setbyte(et, 0); pushTok(TK_EOF, et, 0, line); return; }
+        var c: int = getbyte(csrc + spos);
+        if c_isAlpha(c) {
+            var start: int = spos;
+            while spos < srclen && isAlnum(getbyte(csrc + spos)) { spos = spos + 1; }
+            var n: int = spos - start;
+            var t: ptr = (ptr)malloc(n + 1);
+            memcpy(t, csrc + start, n);
+            setbyte(t + n, 0);
+            var kw: int = isKw(t, n);
+            if kw != 0 { pushTok(kw, t, 0, line); } else { pushTok(TK_IDENT, t, 0, line); }
+        }
+        elif c_isDigit(c) { lexNum(); }
+        elif c == 34 { lexStr(); }
+        elif c == 39 { lexChar(); }
+        elif c == 43 || c == 45 {
+            var nxt: int = 0; if spos + 1 < srclen { nxt = getbyte(csrc + spos + 1); }
+            if c == 43 && nxt == 43 { pushTok(TK_PLUSPLUS, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 45 && nxt == 45 { pushTok(TK_MINUSMINUS, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 43 && nxt == 61 { pushTok(TK_PLUSEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 45 && nxt == 61 { pushTok(TK_MINUSEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 45 && nxt == 62 { pushTok(TK_ARROW, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            else { pushTok(c, (ptr)malloc(1), 0, line); spos = spos + 1; }
+        }
+        elif c == 61 || c == 33 || c == 60 || c == 62 {
+            var nxt: int = 0; if spos + 1 < srclen { nxt = getbyte(csrc + spos + 1); }
+            var n2: int = 0; if spos + 2 < srclen { n2 = getbyte(csrc + spos + 2); }
+            if c == 61 && nxt == 61 {
+                if n2 == 61 { pushTok(TK_TRIPLEEQ, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_EQEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            elif c == 33 && nxt == 61 {
+                if n2 == 61 { pushTok(TK_TRIPLENE, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_NE, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            elif c == 60 && nxt == 61 {
+                if n2 == 62 { pushTok(TK_SPACESHIP, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_LE, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            elif c == 62 && nxt == 61 { pushTok(TK_GE, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 60 && nxt == 60 { if n2 == 61 { pushTok(TK_SHLEQ, (ptr)malloc(1), 0, line); spos = spos + 3; } else { pushTok(TK_SHL, (ptr)malloc(1), 0, line); spos = spos + 2; } }
+            elif c == 62 && nxt == 62 {
+                if n2 == 62 { pushTok(TK_USHR, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                elif n2 == 61 { pushTok(TK_SHREQ, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_SHR, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            else { pushTok(c, (ptr)malloc(1), 0, line); spos = spos + 1; }
+        }
+        elif c == 38 || c == 124 || c == 94 || c == 42 || c == 47 || c == 37 {
+            var nxt: int = 0; if spos + 1 < srclen { nxt = getbyte(csrc + spos + 1); }
+            var n2: int = 0; if spos + 2 < srclen { n2 = getbyte(csrc + spos + 2); }
+            if c == 38 && nxt == 38 {
+                if n2 == 61 { pushTok(TK_ANDANDEQ, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_ANDAND, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            elif c == 124 && nxt == 124 {
+                if n2 == 61 { pushTok(TK_OROREQ, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_OROR, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            elif c == 42 && nxt == 61 { pushTok(TK_STAREQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 42 && nxt == 42 {
+                if n2 == 61 { pushTok(TK_STARSTAREQ, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_STARSTAR, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            elif c == 47 && nxt == 61 { pushTok(TK_SLASHEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 37 && nxt == 61 { pushTok(TK_PERCENTEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 38 && nxt == 61 { pushTok(TK_AMPEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 124 && nxt == 61 { pushTok(TK_PIPEEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            elif c == 94 && nxt == 61 { pushTok(TK_CARETEQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            else { pushTok(c, (ptr)malloc(1), 0, line); spos = spos + 1; }
+        }
+        elif c == 63 {
+            var nxt: int = 0; if spos + 1 < srclen { nxt = getbyte(csrc + spos + 1); }
+            var n2: int = 0; if spos + 2 < srclen { n2 = getbyte(csrc + spos + 2); }
+            if nxt == 63 {
+                if n2 == 61 { pushTok(TK_QQEQ, (ptr)malloc(1), 0, line); spos = spos + 3; }
+                else { pushTok(TK_QQ, (ptr)malloc(1), 0, line); spos = spos + 2; }
+            }
+            else { pushTok(c, (ptr)malloc(1), 0, line); spos = spos + 1; }
+        }
+        elif c == 46 && spos + 1 < srclen && c_isDigit(getbyte(csrc + spos + 1)) { lexNum(); }
+        elif c == 46 && spos + 2 < srclen && getbyte(csrc + spos + 1) == 46 && getbyte(csrc + spos + 2) == 46 {
+            pushTok(TK_ELLIPSIS, (ptr)malloc(1), 0, line); spos = spos + 3;
+        }
+        else { pushTok(c, (ptr)malloc(1), 0, line); spos = spos + 1; }
+    }
+}
+
+// ---------------- tables -----------------------------------------------------

@@ -1,0 +1,5 @@
+fn die(msg: str) void {
+    fprintf(tout, "wall: error: %s\n", msg);
+    exit(1);
+}
+

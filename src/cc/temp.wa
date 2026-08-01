@@ -1,0 +1,11 @@
+// ---------------- codegen helpers -------------------------------------------
+fn newtmp() ptr {
+    var sb: ptr = sbNew();
+    sbAppendChar(sb, 37); // '%'
+    sbAppendCStr(sb, "t");
+    sbAppendI64(sb, tmpn);
+    tmpn = tmpn + 1;
+    sbAppendChar(sb, 0);
+    var s: ptr = sbData(sb);
+    return s;
+}

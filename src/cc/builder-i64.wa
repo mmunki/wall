@@ -1,0 +1,9 @@
+fn sbAppendI64(sb: ptr, v: int) void {
+    var tmpb: ptr = (ptr)malloc(32);
+    var n: int = snprintf(tmpb, 32, "%lld", v);
+    sbReserve(sb, n);
+    var d: ptr = sbData(sb);
+    memcpy(d + sb[8], tmpb, n);
+    sb[8] = sb[8] + n;
+    free(tmpb);
+}

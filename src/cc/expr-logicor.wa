@@ -1,0 +1,4 @@
+fn logicOr() void {
+    logicAnd();
+    while 1 == 1 { if cur() == TK_OROR { adv(); var save: ptr = vreg; var savet: ptr = vtype; logicAnd(); var l: ptr = coerceBool(save, savet); var r: ptr = coerceBool(vreg, vtype); var rr: ptr = newtmp(); fprintf(tout, "  %s = or i1 %s, %s\n", rr, l, r); setVal(rr, 0, "bool", 0); } else { break; } }
+}

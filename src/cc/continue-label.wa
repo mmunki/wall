@@ -1,0 +1,19 @@
+fn contLabel() ptr {
+    if loopdepth == 0 { return contstk0; }
+    if loopdepth == 1 { return contstk1; }
+    if loopdepth == 2 { return contstk2; }
+    if loopdepth == 3 { return contstk3; }
+    if loopdepth == 4 { return contstk4; }
+    if loopdepth == 5 { return contstk5; }
+    if loopdepth == 6 { return contstk6; }
+    if loopdepth == 7 { return contstk7; }
+    if loopdepth == 8 { return contstk8; }
+    if loopdepth == 9 { return contstk9; }
+    if loopdepth == 10 { return contstk10; }
+    if loopdepth == 11 { return contstk11; }
+    if loopdepth == 12 { return contstk12; }
+    if loopdepth == 13 { return contstk13; }
+    if loopdepth == 14 { return contstk14; }
+    return contstk15;
+}
+

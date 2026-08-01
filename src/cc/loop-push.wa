@@ -1,0 +1,18 @@
+fn pushLoop(b: ptr, c: ptr) void {
+    loopdepth = loopdepth + 1;
+    if loopdepth == 1 { brkstk1 = b; contstk1 = c; }
+    elif loopdepth == 2 { brkstk2 = b; contstk2 = c; }
+    elif loopdepth == 3 { brkstk3 = b; contstk3 = c; }
+    elif loopdepth == 4 { brkstk4 = b; contstk4 = c; }
+    elif loopdepth == 5 { brkstk5 = b; contstk5 = c; }
+    elif loopdepth == 6 { brkstk6 = b; contstk6 = c; }
+    elif loopdepth == 7 { brkstk7 = b; contstk7 = c; }
+    elif loopdepth == 8 { brkstk8 = b; contstk8 = c; }
+    elif loopdepth == 9 { brkstk9 = b; contstk9 = c; }
+    elif loopdepth == 10 { brkstk10 = b; contstk10 = c; }
+    elif loopdepth == 11 { brkstk11 = b; contstk11 = c; }
+    elif loopdepth == 12 { brkstk12 = b; contstk12 = c; }
+    elif loopdepth == 13 { brkstk13 = b; contstk13 = c; }
+    elif loopdepth == 14 { brkstk14 = b; contstk14 = c; }
+    else { brkstk15 = b; contstk15 = c; }
+}

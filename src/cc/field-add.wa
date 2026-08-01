@@ -1,0 +1,11 @@
+fn addField(st: ptr, name: ptr, typ: ptr) void {
+    var f: ptr = allocNode(40);
+    f[FLD_NAME] = (int)name;
+    f[FLD_TYP] = (int)typ;
+    f[FLD_OFF] = st[STR_SZ];
+    f[FLD_SZ] = szof(typ);
+    f[FLD_NEXT] = (int)st[STR_FIELDS];
+    st[STR_FIELDS] = (int)f;
+    st[STR_SZ] = st[STR_SZ] + f[FLD_SZ];
+    st[STR_NF] = st[STR_NF] + 1;
+}

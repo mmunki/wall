@@ -1,0 +1,18 @@
+fn brkLabel() ptr {
+    if loopdepth == 0 { return brkstk0; }
+    if loopdepth == 1 { return brkstk1; }
+    if loopdepth == 2 { return brkstk2; }
+    if loopdepth == 3 { return brkstk3; }
+    if loopdepth == 4 { return brkstk4; }
+    if loopdepth == 5 { return brkstk5; }
+    if loopdepth == 6 { return brkstk6; }
+    if loopdepth == 7 { return brkstk7; }
+    if loopdepth == 8 { return brkstk8; }
+    if loopdepth == 9 { return brkstk9; }
+    if loopdepth == 10 { return brkstk10; }
+    if loopdepth == 11 { return brkstk11; }
+    if loopdepth == 12 { return brkstk12; }
+    if loopdepth == 13 { return brkstk13; }
+    if loopdepth == 14 { return brkstk14; }
+    return brkstk15;
+}

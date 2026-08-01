@@ -1,0 +1,1 @@
+fn allocNode(n: int) ptr { var p: ptr = (ptr)malloc(n); memset(p, 0, n); return p; }

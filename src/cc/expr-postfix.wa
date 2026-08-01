@@ -1,0 +1,48 @@
+fn postfix() void {
+    primary();
+    while 1 == 1 {
+        var k: int = cur();
+        if k == 40 && vtype != 0 && strEq(vtype, "fn") { adv(); callArgs(); continue; }
+        if k == 40 { die("cannot call a non-function value"); }
+        if k == 46 { // '.'
+            adv(); var fname: ptr = curText(); expect(TK_IDENT, "field name");
+            if vaddr == 0 { die("cannot access field of non-addressable value"); }
+            var st: ptr = findStruct(vtype);
+            if st == 0 { fprintf(tout, "wall: type '%s' has no fields\n", vtype); exit(1); }
+            var fld: ptr = findField(st, fname);
+            if fld == 0 { fprintf(tout, "wall: type '%s' has no field '%s'\n", vtype, fname); exit(1); }
+            var addr: ptr = newtmp();
+            fprintf(tout, "  %s = getelementptr inbounds i8, i8* %s, i32 %lld\n", addr, vaddr, fld[FLD_OFF]);
+            var fl: ptr = lltyp((ptr)fld[FLD_TYP]);
+            var r: ptr = 0;
+            if strEq(fl, "void") == 0 { r = newtmp(); fprintf(tout, "  %s = load %s, %s* %s\n", r, fl, fl, addr); }
+            setVal(r, addr, (ptr)fld[FLD_TYP], 0);
+            continue;
+        }
+        if k == 91 { // '['
+            adv();
+            var base: ptr = vreg;
+            assign();   // index -> vreg
+            expect(93, "']'");
+            var addr: ptr = newtmp();
+            fprintf(tout, "  %s = getelementptr i8, i8* %s, i64 %s\n", addr, base, vreg);
+            var r: ptr = newtmp();
+            fprintf(tout, "  %s = load i64, i64* %s\n", r, addr);
+            setVal(r, addr, "int", 0);
+            continue;
+        }
+        if k == TK_PLUSPLUS || k == TK_MINUSMINUS {
+            if vaddr == 0 { die("cannot modify rvalue"); }
+            var isp: int = 0; if k == TK_PLUSPLUS { isp = 1; }
+            adv();
+            var fl: ptr = lltyp(vtype);
+            var old: ptr = newtmp(); var nu: ptr = newtmp();
+            fprintf(tout, "  %s = load %s, %s* %s\n", old, fl, fl, vaddr);
+            if isp == 1 { fprintf(tout, "  %s = add %s %s, 1\n", nu, fl, old); } else { fprintf(tout, "  %s = sub %s %s, 1\n", nu, fl, old); }
+            fprintf(tout, "  store %s %s, %s* %s\n", fl, nu, fl, vaddr);
+            setVal(old, 0, vtype, 0);
+            continue;
+        }
+        break;
+    }
+}

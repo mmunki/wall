@@ -1,0 +1,10 @@
+fn strEq2(s: ptr, lit: str, n: int) int {
+    // compare first n bytes of s with null-terminated lit
+    if n != strlen(lit) { return 0; }
+    var i: int = 0;
+    while i < n {
+        if getbyte(s + i) != getbyte(lit + i) { return 0; }
+        i = i + 1;
+    }
+    return 1;
+}

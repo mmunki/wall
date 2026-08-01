@@ -1,0 +1,177 @@
+fn emitSwitch() void {
+    // switch (expr) { case c1: stmts; ... default: stmts; }
+    // Compiled as a chain of comparisons against a single value, each case
+    // branching to its own body; a `default` body (wherever it appears) is
+    // collected into a dedicated label and used as the fall-through target
+    // for unmatched values.
+    adv(); // 'switch'
+    expect(40, "'('");
+    assign();
+    var sval: ptr = vreg; var styp: ptr = vtype;
+    expect(41, "')'");
+    expect(123, "'{'");
+    var end: ptr = newlabel("swend");
+    var si: ptr = coerceInt(sval, styp);
+    var defflab: ptr = 0;
+    var defs: int = 0; var defe: int = 0; // token range of default body
+    var hasdef: int = 0;
+    while cur() != 125 {
+        if cur() == K_CASE {
+            adv();
+            assign(); // case value
+            var cval: ptr = vreg;
+            expect(58, "':'");
+            var body: ptr = newlabel("swb"); var nx: ptr = newlabel("swn");
+            var cv: ptr = coerceInt(cval, vtype);
+            var cmp: ptr = newtmp();
+            fprintf(tout, "  %s = icmp eq i64 %s, %s\n", cmp, si, cv);
+            fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", cmp, body, nx);
+            fprintf(tout, "%s:\n", body);
+            while cur() != 125 && cur() != K_CASE && cur() != K_DEFAULT { stmt(); }
+            fprintf(tout, "br label %%%s\n", end);
+            fprintf(tout, "%s:\n", nx);
+        }
+        elif cur() == K_DEFAULT {
+            // Record the default body's token range but do NOT emit it here.
+            // It is re-parsed and emitted after the case chain, so it catches
+            // all unmatched values regardless of where `default` appears.
+            adv(); expect(58, "':'");
+            hasdef = 1;
+            defs = tpos;
+            while cur() != 125 && cur() != K_CASE { stmt(); }
+            defe = tpos;
+        }
+        else { die("expected 'case' or 'default' in switch"); }
+    }
+    expect(125, "'}'");
+    if hasdef == 1 {
+        defflab = newlabel("swd");
+        fprintf(tout, "br label %%%s\n", defflab);
+        fprintf(tout, "%s:\n", defflab);
+        var saved: int = tpos;
+        tpos = defs;
+        while tpos < defe { stmt(); }
+        tpos = saved;
+        fprintf(tout, "br label %%%s\n", end);
+    }
+    else { fprintf(tout, "br label %%%s\n", end); }
+    fprintf(tout, "%s:\n", end);
+}
+ fn stmt() void {
+     var k: int = cur();
+     if k == K_LET { adv(); declLetVar(0); return; }
+     if k == K_VAR { adv(); declLetVar(1); return; }
+     if k == K_CONST || k == K_UNSIGNED || k == K_SIGNED || k == K_STATIC {
+         // storage/qualifier keywords: skip and treat the following
+         // declaration as a plain `var` (they carry no codegen effect here).
+         while cur() == K_CONST || cur() == K_UNSIGNED || cur() == K_SIGNED || cur() == K_STATIC {
+             adv();
+             if cur() == K_VAR || cur() == K_LET { adv(); }
+         }
+         declLetVar(1);
+         return;
+     }
+     if k == K_TYPEDEF {
+         // typedef name = type; -- recorded as a plain integer alias.
+         adv();
+         var tname: ptr = curText(); expect(TK_IDENT, "typedef name");
+         expect(61, "'='");
+         var ttyp: ptr = curText(); adv();
+         addTypeAlias(tname, ttyp);
+         expect(59, "';'");
+         return;
+     }
+    if k == K_RETURN {
+        adv();
+        if cur() != 59 {
+            assign();
+            var fl: ptr = lltyp(curret);
+            if strEq(fl, "void") != 0 {
+                fprintf(tout, "  ret void\n");
+            } elif strEq(fl, "i8*") != 0 && isPtrType(vtype) == 0 && isStructType(vtype) == 0 {
+                var p: ptr = newtmp();
+                fprintf(tout, "  %s = inttoptr i64 %s to i8*\n", p, vreg);
+                fprintf(tout, "  ret i8* %s\n", p);
+            } else { fprintf(tout, "  ret %s %s\n", fl, vreg); }
+        } else { fprintf(tout, "  ret void\n"); }
+        expect(59, "';'");
+        return;
+    }
+    if k == K_IF { emitIf(); return; }
+    if k == K_SWITCH { emitSwitch(); return; }
+    if k == K_MATCH { emitSwitch(); return; }
+     if k == K_WHILE {
+         adv();
+         var top: ptr = newlabel("w"); var body: ptr = newlabel("b"); var end: ptr = newlabel("e");
+         fprintf(tout, "br label %%%s\n", top);
+         fprintf(tout, "%s:\n", top);
+         assign();
+         fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", condval(), body, end);
+         fprintf(tout, "%s:\n", body);
+         pushLoop(end, top);
+         block();
+         popLoop();
+         fprintf(tout, "br label %%%s\n", top);
+         fprintf(tout, "%s:\n", end);
+         return;
+     }
+     if k == K_DO {
+         adv();
+         var body: ptr = newlabel("db"); var cond: ptr = newlabel("dc"); var end: ptr = newlabel("de");
+         fprintf(tout, "br label %%%s\n", body);
+         fprintf(tout, "%s:\n", body);
+         pushLoop(end, cond);
+         block();
+         popLoop();
+         fprintf(tout, "br label %%%s\n", cond);
+         fprintf(tout, "%s:\n", cond);
+         expect(K_WHILE, "'while'");
+         assign();
+         fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", condval(), body, end);
+         fprintf(tout, "%s:\n", end);
+         expect(59, "';'");
+         return;
+     }
+    if k == K_FOR {
+        adv();
+        var vname: ptr = curText(); expect(TK_IDENT, "loop variable"); expect(61, "'='");
+        assign();
+        var an: ptr = newtmp();
+        fprintf(tout, "  %s = alloca i64\n", an);
+        fprintf(tout, "  store i64 %s, i64* %s\n", vreg, an);
+        addloc(vname, an, "int", 1);
+        expect(59, "';'");
+        var top: ptr = newlabel("f"); var body: ptr = newlabel("b"); var step: ptr = newlabel("s"); var end: ptr = newlabel("e");
+        fprintf(tout, "br label %%%s\n", top);
+        fprintf(tout, "%s:\n", top);
+        assign();
+        fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", condval(), body, end);
+        expect(59, "';'");
+        var stepstart: int = tpos; var stepend: int = tpos; var d: int = 0;
+        while stepend < 1000000 {
+            var kk: int = tokKind(stepend);
+            if kk == 123 { if d == 0 { break; } d = d - 1; }
+            elif kk == 125 { d = d + 1; }
+            stepend = stepend + 1;
+        }
+        tpos = stepend;
+        fprintf(tout, "%s:\n", body);
+        pushLoop(end, step);
+        block();
+        popLoop();
+        fprintf(tout, "br label %%%s\n", step);
+        fprintf(tout, "%s:\n", step);
+        var saved: int = tpos;
+        tpos = stepstart;
+        while tpos < stepend { assign(); tpos = stepend; }
+        tpos = saved;
+        fprintf(tout, "br label %%%s\n", top);
+        fprintf(tout, "%s:\n", end);
+        return;
+    }
+    if k == K_BREAK { adv(); if loopdepth > 0 { fprintf(tout, "br label %%%s\n", brkLabel()); } expect(59, "';'"); return; }
+    if k == K_CONTINUE { adv(); if loopdepth > 0 { fprintf(tout, "br label %%%s\n", contLabel()); } expect(59, "';'"); return; }
+    if k == 123 { block(); return; }
+    assign();
+    expect(59, "';'");
+}

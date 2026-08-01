@@ -1,0 +1,19 @@
+fn skipWs() void {
+    while spos < srclen {
+        var c: int = getbyte(csrc + spos);
+        if c == 32 || c == 9 || c == 13 { spos = spos + 1; }
+        elif c == 10 { spos = spos + 1; line = line + 1; }
+        elif c == 47 && spos + 1 < srclen && getbyte(csrc + spos + 1) == 47 {
+            while spos < srclen && getbyte(csrc + spos) != 10 { spos = spos + 1; }
+        }
+        elif c == 47 && spos + 1 < srclen && getbyte(csrc + spos + 1) == 42 {
+            spos = spos + 2;
+            while spos + 1 < srclen {
+                if getbyte(csrc + spos) == 42 && getbyte(csrc + spos + 1) == 47 { spos = spos + 2; break; }
+                if getbyte(csrc + spos) == 10 { line = line + 1; }
+                spos = spos + 1;
+            }
+        }
+        else { break; }
+    }
+}

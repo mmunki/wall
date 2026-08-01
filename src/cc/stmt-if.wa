@@ -1,0 +1,29 @@
+fn emitIf() void {
+    adv(); // 'if'
+    var end: ptr = newlabel("ifend");
+    var thenlab: ptr = newlabel("ift");
+    var next: ptr = newlabel("ifn");
+    assign();
+    fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", condval(), thenlab, next);
+    fprintf(tout, "%s:\n", thenlab);
+    block();
+    fprintf(tout, "br label %%%s\n", end);
+    fprintf(tout, "%s:\n", next);
+    while 1 == 1 {
+        var k: int = cur();
+        if k == K_ELIF {
+            adv(); var tl: ptr = newlabel("ift"); var nx: ptr = newlabel("ifn");
+            assign();
+            fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", condval(), tl, nx);
+            fprintf(tout, "%s:\n", tl);
+            block();
+            fprintf(tout, "br label %%%s\n", end);
+            fprintf(tout, "%s:\n", nx);
+        }
+        elif k == K_ELSE {
+            adv(); block(); fprintf(tout, "br label %%%s\n", end); break;
+        }
+        else { fprintf(tout, "br label %%%s\n", end); break; }
+    }
+    fprintf(tout, "%s:\n", end);
+}

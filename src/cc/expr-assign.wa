@@ -1,0 +1,118 @@
+fn assign() void {
+    // try lvalue assignment
+    if cur() == TK_IDENT {
+        var s: ptr = findall(curText());
+        if s != 0 && s[SYM_ISFUNC] == 0 {
+            var save: int = tpos;
+            var base: ptr = (ptr)s[SYM_LL];
+            var lv: ptr = base; var lvt: ptr = (ptr)s[SYM_TYP];
+            adv();
+            while cur() == 46 || cur() == 91 {
+                if cur() == 46 {
+                    adv(); var fname: ptr = curText(); expect(TK_IDENT, "field name");
+                    var st: ptr = findStruct(lvt);
+                    var fld: ptr = findField(st, fname);
+                    var addr: ptr = newtmp();
+                    var si: ptr = lv;
+                    if isPtrType(lvt) != 0 { var vl: ptr = newtmp(); fprintf(tout, "  %s = load i8*, i8** %s\n", vl, lv); si = vl; }
+                    fprintf(tout, "  %s = getelementptr inbounds i8, i8* %s, i32 %lld\n", addr, si, fld[FLD_OFF]);
+                    lv = addr; lvt = (ptr)fld[FLD_TYP];
+                } else {
+                    adv(); assign(); expect(93, "']'");
+                    var addr: ptr = newtmp();
+                    var si: ptr = lv;
+                    if isPtrType(lvt) != 0 { var vl: ptr = newtmp(); fprintf(tout, "  %s = load i8*, i8** %s\n", vl, lv); si = vl; }
+                    fprintf(tout, "  %s = getelementptr i8, i8* %s, i64 %s\n", addr, si, vreg);
+                    lv = addr; lvt = "int";
+                }
+            }
+            var k: int = cur();
+            if k == 61 || k == TK_PLUSEQ || k == TK_MINUSEQ || k == TK_STAREQ || k == TK_SLASHEQ ||
+               k == TK_PERCENTEQ || k == TK_AMPEQ || k == TK_PIPEEQ || k == TK_CARETEQ || k == TK_SHLEQ || k == TK_SHREQ ||
+               k == TK_ANDANDEQ || k == TK_OROREQ || k == TK_QQEQ {
+                adv();
+                var fl: ptr = lltyp(lvt);
+                if k == 61 {
+                    assign();
+                    if strEq(fl, "void") != 0 { die("cannot store void"); }
+                    var sv: ptr = vreg;
+                    if strEq(fl, "i8*") != 0 { sv = coercePtr(vreg, vtype); }
+                    fprintf(tout, "  store %s %s, %s* %s\n", fl, sv, fl, lv);
+                    setVal(sv, 0, lvt, 0);
+                    return;
+                }
+                elif k == TK_QQEQ {
+                    // a ??= b  =>  if (a == 0) { a = b }
+                    var old: ptr = newtmp();
+                    fprintf(tout, "  %s = load %s, %s* %s\n", old, fl, fl, lv);
+                    var oldi: ptr = coerceInt(old, lvt);
+                    var c0: ptr = newtmp();
+                    fprintf(tout, "  %s = icmp ne i64 %s, 0\n", c0, oldi);
+                    var qt: ptr = newlabel(".CQT"); var qe: ptr = newlabel(".CQE"); var qm: ptr = newlabel(".CQM");
+                    fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", c0, qt, qe);
+                    fprintf(tout, "%s:\n", qt);
+                    fprintf(tout, "  br label %%%s\n", qm);
+                    fprintf(tout, "%s:\n", qe);
+                    assign();
+                    var sv: ptr = vreg;
+                    if strEq(fl, "i8*") != 0 { sv = coercePtr(vreg, vtype); }
+                    fprintf(tout, "  store %s %s, %s* %s\n", fl, sv, fl, lv);
+                    fprintf(tout, "  br label %%%s\n", qm);
+                    fprintf(tout, "%s:\n", qm);
+                    var rr: ptr = newtmp();
+                    fprintf(tout, "  %s = phi %s [ %s, %%%s ], [ %s, %%%s ]\n", rr, fl, old, qt, sv, qe);
+                    setVal(rr, 0, lvt, 0);
+                    return;
+                }
+                else {
+                    var old: ptr = newtmp();
+                    fprintf(tout, "  %s = load %s, %s* %s\n", old, fl, fl, lv);
+                    var saverv: ptr = vreg;
+                    assign();
+                    var r: ptr = newtmp();
+                    if k == TK_PLUSEQ { fprintf(tout, "  %s = add %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_MINUSEQ { fprintf(tout, "  %s = sub %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_STAREQ { fprintf(tout, "  %s = mul %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_SLASHEQ { fprintf(tout, "  %s = sdiv %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_PERCENTEQ { fprintf(tout, "  %s = srem %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_AMPEQ || k == TK_ANDANDEQ { fprintf(tout, "  %s = and %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_PIPEEQ || k == TK_OROREQ { fprintf(tout, "  %s = or %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_CARETEQ { fprintf(tout, "  %s = xor %s %s, %s\n", r, fl, old, vreg); }
+                    elif k == TK_SHLEQ { fprintf(tout, "  %s = shl %s %s, %s\n", r, fl, old, vreg); }
+                    else { fprintf(tout, "  %s = ashr %s %s, %s\n", r, fl, old, vreg); }
+                    fprintf(tout, "  store %s %s, %s* %s\n", fl, r, fl, lv);
+                    setVal(r, 0, lvt, 0);
+                    return;
+                }
+            }
+            tpos = save;
+        }
+    }
+    coalesce();
+    // ternary conditional:  cond ? a : b
+    if cur() == 63 {
+        adv();
+        var ccond: ptr = vreg; var ctyp: ptr = vtype;
+        var thenlab: ptr = newlabel(".LT"); var elselab: ptr = newlabel(".LE"); var endlab: ptr = newlabel(".LD");
+        var cb: ptr = coerceBool(ccond, ctyp);
+        fprintf(tout, "  br i1 %s, label %%%s, label %%%s\n", cb, thenlab, elselab);
+        fprintf(tout, "%s:\n", thenlab);
+        assign();
+        var tval: ptr = vreg; var ttyp: ptr = vtype;
+        fprintf(tout, "br label %%%s\n", endlab);
+        fprintf(tout, "%s:\n", elselab);
+        expect(58, "':'");
+        assign();
+        var eval: ptr = vreg; var etyp: ptr = vtype;
+        fprintf(tout, "br label %%%s\n", endlab);
+        fprintf(tout, "%s:\n", endlab);
+        // merge with a phi node joining the two branch values
+        var fl: ptr = lltyp(ttyp);
+        var phi: ptr = newtmp();
+        fprintf(tout, "  %s = phi %s [ %s, %%%s ], [ %s, %%%s ]\n", phi, fl, tval, thenlab, eval, elselab);
+        setVal(phi, 0, ttyp, 0);
+        return;
+    }
+}
+
+// ---------------- statements ------------------------------------------------
