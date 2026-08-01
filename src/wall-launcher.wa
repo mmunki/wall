@@ -14,7 +14,6 @@
 // file stays well under 5 KB, satisfying the "tiny launcher" design goal.
 // ============================================================================
 
-
 // ---------------- libc / compiler accessors -----------------------------------
 extern fn arge() int;              // number of command-line arguments
 extern fn argp(i: int) str;        // i-th argument as a string
