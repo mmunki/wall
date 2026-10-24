@@ -75,6 +75,13 @@ jobs:
             gcc-powerpc64le-linux-gnu gcc-mips64el-linux-gnuabi64 \
             qemu-user
 
+      # The bootstrap compiler stage0/cc is committed as an ARM64 (Android /
+      # Termux) binary.  A GitHub runner is x86_64, so the checked-in binary
+      # cannot be executed there; build the host seed from stage0/cc.c first.
+      - name: Build stage0 bootstrap compiler (host)
+        run: |
+          clang -std=c11 -O2 -o stage0/cc stage0/cc.c
+
       - name: Build Wall for ${{ matrix.target }}
         env:
           TARGET: ${{ matrix.target }}
@@ -131,6 +138,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y llvm lld binutils
+      # The bootstrap compiler stage0/cc is committed as an ARM64 (Android /
+      # Termux) binary.  A GitHub runner is x86_64, so the checked-in binary
+      # cannot be executed there; build the host seed from stage0/cc.c first.
+      - name: Build stage0 bootstrap compiler (host)
+        run: |
+          clang -std=c11 -O2 -o stage0/cc stage0/cc.c
+
       - name: Build native compiler
         run: ./build.sh
       - name: Cross-codegen to wasm32
